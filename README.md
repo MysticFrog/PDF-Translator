@@ -47,7 +47,7 @@ WPF (.NET 8) app that translates PDFs while keeping the original layout, with a 
 | DeepL API | API key (Free keys end in `:fx`) |
 | Google Cloud Translation | API key |
 | Microsoft Translator (Azure) | key + region |
-| Claude (Claude Code sign-in) | the Claude Code CLI signed in to your Claude account once (`claude`, then `/login`); no API key. Found on PATH, in `~\.local\bin`, or the copy bundled with Claude Desktop |
+| Claude (Claude Code sign-in) | the Claude Code CLI signed in to your Claude account: a saved `/login`, or a token from `claude setup-token` pasted into Settings › Claude Code token; no API key. Found on PATH, in `~\.local\bin`, or the copy bundled with Claude Desktop |
 | Claude (Anthropic API key) | API key or `ANTHROPIC_API_KEY`; default model `claude-opus-5-5` with server-side refusal fallback |
 | Extract only | nothing; finds the blocks **without translating** them – fill them in the editor, or ask Claude in Claude Code / Claude Desktop to translate the open PDF through MCP |
 

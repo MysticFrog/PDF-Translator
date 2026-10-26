@@ -15,9 +15,11 @@ public sealed class ClaudeCodeTranslator : ITranslator
 {
     readonly string _exe;
     readonly string _model;
+    readonly string _token;
 
-    public ClaudeCodeTranslator(string? configuredPath, string model)
+    public ClaudeCodeTranslator(string? configuredPath, string model, string token = "")
     {
+        _token = token.Trim();
         _exe = Locate(configuredPath) ?? throw new InvalidOperationException(
             "Claude Code was not found. Install it (https://claude.com/claude-code) or set its path in Settings.");
         _model = model.Trim();
@@ -111,6 +113,8 @@ public sealed class ClaudeCodeTranslator : ITranslator
         // When this app was itself started from a Claude session, don't let the child think it is nested in it.
         foreach (var key in psi.Environment.Keys.Where(k => k.StartsWith("CLAUDE_CODE_") || k == "CLAUDECODE" || k.StartsWith("CLAUDE_AGENT_SDK")).ToList())
             psi.Environment.Remove(key);
+        // A token from "claude setup-token" signs the CLI in without a saved /login.
+        if (_token.Length > 0) psi.Environment["CLAUDE_CODE_OAUTH_TOKEN"] = _token;
 
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Could not start Claude Code.");
         using var reg = ct.Register(() => { try { proc.Kill(true); } catch { } });
@@ -139,8 +143,11 @@ public sealed class ClaudeCodeTranslator : ITranslator
         {
             string message = result.Length > 0 ? result : stderr.Trim();
             if (message.Contains("login", StringComparison.OrdinalIgnoreCase) || message.Contains("logged in", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    "Claude Code is not signed in. Open a terminal, run:\n\n  \"" + _exe + "\"\n\nand use /login once (your Claude account; no API key needed). Then translate again.");
+                throw new InvalidOperationException(_token.Length > 0
+                    ? "Claude Code rejected the saved token. Create a new one with \"claude setup-token\" and paste it in Settings › Claude Code token."
+                    : "Claude Code is not signed in. In a normal Windows Terminal or Command Prompt (not inside Claude), run:\n\n  \"" + _exe +
+                      "\" setup-token\n\nsign in with your Claude account, then paste the token it prints into Settings › Claude Code token. " +
+                      "(No API key needed.)");
             throw new InvalidOperationException("Claude Code failed: " + (message.Length > 400 ? message[..400] + "…" : message));
         }
 

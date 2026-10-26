@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         McpEnabled.IsChecked = _s.McpEnabled;
         ClaudeCodePath.Text = _s.ClaudeCodePath;
         ClaudeCodeModel.Text = _s.ClaudeCodeModel;
+        ClaudeCodeToken.Password = _s.ClaudeCodeToken;
         if (string.IsNullOrWhiteSpace(_s.ClaudeCodePath) && PdfTranslator.Translators.ClaudeCodeTranslator.Locate(null) is { } found)
             ClaudeCodePath.ToolTip = "Found automatically: " + found;
         McpPort.Text = _s.McpPort.ToString();
@@ -51,6 +52,7 @@ public partial class SettingsWindow : Window
         _s.McpEnabled = McpEnabled.IsChecked == true;
         _s.ClaudeCodePath = ClaudeCodePath.Text.Trim();
         _s.ClaudeCodeModel = ClaudeCodeModel.Text.Trim();
+        _s.ClaudeCodeToken = ClaudeCodeToken.Password.Trim();
         if (int.TryParse(McpPort.Text, out int port) && port is > 1024 and < 65536) _s.McpPort = port;
         DialogResult = true;
     }

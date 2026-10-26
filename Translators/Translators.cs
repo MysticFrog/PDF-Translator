@@ -39,7 +39,7 @@ public static class TranslatorFactory
     public static ITranslator? Create(string id, AppSettings s) => id switch
     {
         "none" => null,
-        "claude-code" => new ClaudeCodeTranslator(s.ClaudeCodePath, s.ClaudeCodeModel),
+        "claude-code" => new ClaudeCodeTranslator(s.ClaudeCodePath, s.ClaudeCodeModel, s.ClaudeCodeToken),
         "google-free" => new GoogleFreeTranslator(),
         "mymemory" => new MyMemoryTranslator(s.MyMemoryEmail),
         "libre" => new LibreTranslator(Require(s.LibreUrl, "LibreTranslate URL"), s.LibreKey),

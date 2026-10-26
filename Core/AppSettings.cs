@@ -26,13 +26,15 @@ public sealed class AppSettings
     public string ClaudeCodePath { get; set; } = "";
     /// <summary>Model alias for Claude Code (e.g. opus, sonnet); empty = Claude Code's default.</summary>
     public string ClaudeCodeModel { get; set; } = "";
+    /// <summary>Long-lived sign-in token from <c>claude setup-token</c>; used when the CLI has no saved /login.</summary>
+    public string ClaudeCodeToken { get; set; } = "";
 
     /// <summary>Serve the MCP endpoint so Claude Code / Claude Desktop can drive the open document.</summary>
     public bool McpEnabled { get; set; } = true;
     public int McpPort { get; set; } = 8765;
     public bool ShowBlockOutlines { get; set; } = true;
 
-    static readonly string[] SecretProps = { nameof(DeepLKey), nameof(GoogleCloudKey), nameof(AzureKey), nameof(LibreKey), nameof(AnthropicKey) };
+    static readonly string[] SecretProps = { nameof(DeepLKey), nameof(GoogleCloudKey), nameof(AzureKey), nameof(LibreKey), nameof(AnthropicKey), nameof(ClaudeCodeToken) };
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PdfTranslator", "settings.json");
