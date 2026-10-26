@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PdfTranslator</RootNamespace>
+    <AssemblyName>PdfTranslator</AssemblyName>
+    <Version>1.2.0</Version>
+    <ApplicationIcon>Assets\PdfTranslator.ico</ApplicationIcon>
+    <Company>Andrew Jones</Company>
+    <Copyright>Copyright © 2026 Andrew Jones</Copyright>
+    <Product>PDF Translator</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The installer is its own project (tools\Setup); keep its sources out of the application. -->
+    <Compile Remove="tools\**" />
+    <None Remove="tools\**" />
+    <Page Remove="tools\**" />
+    <Resource Include="Assets\PdfTranslator.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="PDFsharp" Version="6.1.1" />
+    <PackageReference Include="PDFtoImage" Version="4.1.1" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="RapidOcrNet" Version="4.2.0" />
+    <PackageReference Include="Anthropic" Version="13.3.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

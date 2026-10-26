@@ -1,0 +1,72 @@
+<Window x:Class="PdfTranslator.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Translation services" Icon="/Assets/PdfTranslator.ico" Width="620" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <StackPanel Margin="14">
+        <TextBlock TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,10"
+                   Text="Keys are stored encrypted for your Windows account (DPAPI) in %APPDATA%\PdfTranslator\settings.json. Google (free) and MyMemory need no key." />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="190" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.Resources>
+                <Style TargetType="TextBlock"><Setter Property="VerticalAlignment" Value="Center" /><Setter Property="Margin" Value="0,4" /></Style>
+                <Style TargetType="TextBox"><Setter Property="Margin" Value="0,4" /><Setter Property="Padding" Value="3" /></Style>
+                <Style TargetType="PasswordBox"><Setter Property="Margin" Value="0,4" /><Setter Property="Padding" Value="3" /></Style>
+            </Grid.Resources>
+
+            <TextBlock Grid.Row="0" Text="DeepL API key" />
+            <PasswordBox Grid.Row="0" Grid.Column="1" x:Name="DeepLKey" />
+
+            <TextBlock Grid.Row="1" Text="Google Cloud API key" />
+            <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="GoogleKey" />
+
+            <TextBlock Grid.Row="2" Text="Azure Translator key" />
+            <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="AzureKey" />
+            <TextBlock Grid.Row="3" Text="Azure region" />
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="AzureRegion" ToolTip="e.g. westeurope; leave empty for a global resource" />
+
+            <TextBlock Grid.Row="4" Text="LibreTranslate URL" />
+            <TextBox Grid.Row="4" Grid.Column="1" x:Name="LibreUrl" />
+            <TextBlock Grid.Row="5" Text="LibreTranslate key" />
+            <PasswordBox Grid.Row="5" Grid.Column="1" x:Name="LibreKey" />
+
+            <TextBlock Grid.Row="6" Text="MyMemory e-mail (optional)" />
+            <TextBox Grid.Row="6" Grid.Column="1" x:Name="MyMemoryEmail" />
+
+            <TextBlock Grid.Row="7" Text="Anthropic API key" />
+            <PasswordBox Grid.Row="7" Grid.Column="1" x:Name="AnthropicKey" ToolTip="Leave empty to use the ANTHROPIC_API_KEY environment variable" />
+            <TextBlock Grid.Row="8" Text="Claude model" />
+            <TextBox Grid.Row="8" Grid.Column="1" x:Name="AnthropicModel" />
+
+            <TextBlock Grid.Row="9" Text="Installed OCR languages" />
+            <TextBlock Grid.Row="9" Grid.Column="1" x:Name="OcrLanguages" TextWrapping="Wrap" Foreground="#555" />
+            <TextBlock Grid.Row="10" Grid.Column="1" TextWrapping="Wrap" Foreground="#777" FontSize="11"
+                       Text="Add more under Windows Settings › Time &amp; language › Language &amp; region › (language) › Language options › Optical character recognition." />
+
+            <TextBlock Grid.Row="12" Text="Claude Code path" />
+            <TextBox Grid.Row="12" Grid.Column="1" x:Name="ClaudeCodePath" ToolTip="Leave empty to find it automatically" />
+            <TextBlock Grid.Row="13" Text="Claude Code model" />
+            <TextBox Grid.Row="13" Grid.Column="1" x:Name="ClaudeCodeModel" ToolTip="e.g. opus or sonnet; empty = Claude Code's default" />
+
+            <TextBlock Grid.Row="11" Text="MCP server for Claude" />
+            <StackPanel Grid.Row="11" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                <CheckBox x:Name="McpEnabled" Content="Enabled on localhost, port" VerticalAlignment="Center" />
+                <TextBox x:Name="McpPort" Width="60" Margin="6,0,0,0" />
+            </StackPanel>
+        </Grid>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Save" IsDefault="True" Click="Save_Click" Width="90" />
+            <Button Content="Cancel" IsCancel="True" Width="90" />
+        </StackPanel>
+    </StackPanel>
+</Window>

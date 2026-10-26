@@ -1,0 +1,8 @@
+<Project>
+  <!-- The installer's own build folders, off Google Drive (the repository root's props are not imported here). -->
+  <PropertyGroup>
+    <BuildRoot>$(USERPROFILE)\source\build\PdfTranslator\setup\</BuildRoot>
+    <BaseIntermediateOutputPath>$(BuildRoot)obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(BuildRoot)bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

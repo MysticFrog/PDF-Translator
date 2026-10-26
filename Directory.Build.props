@@ -1,0 +1,8 @@
+<Project>
+  <!-- Source lives on Google Drive; keep bin/obj on the local disk. -->
+  <PropertyGroup>
+    <BuildRoot>$(USERPROFILE)\source\build\PdfTranslator\</BuildRoot>
+    <BaseIntermediateOutputPath>$(BuildRoot)obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(BuildRoot)bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

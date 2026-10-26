@@ -1,0 +1,45 @@
+<!--
+  The installer. One executable with the application inside it: nothing to unpack,
+  nothing to install first, and no installer framework. Same design as the BasicConnect
+  installer, as an SDK-style project so the portable .NET SDK builds it (no Visual Studio
+  Build Tools needed); .NET Framework 4.7.2 so it runs on any Windows 10/11 as it is.
+
+  The payload is whatever build.ps1 staged into PayloadDir: Payload.zip (the published,
+  self-contained application) plus PdfTranslator.ico and, when there is one, EULA.txt.
+  Building this project on its own gives an installer with nothing in it, which is why
+  build.ps1 -Installer is the supported way to build it.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>PdfTranslator.Setup</RootNamespace>
+    <AssemblyName>PdfTranslatorSetup</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ApplicationIcon>..\..\Assets\PdfTranslator.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DebugType>none</DebugType>
+    <PayloadDir Condition=" '$(PayloadDir)' == '' ">payload\</PayloadDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Named "Payload.<file>" so the installer finds them without being told. -->
+    <EmbeddedResource Include="$(PayloadDir)*.*">
+      <LogicalName>Payload.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
