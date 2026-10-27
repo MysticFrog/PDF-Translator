@@ -49,6 +49,29 @@ public static class TextTools
         return total.MaxBy(kv => kv.Value).Key;
     }
 
+    /// <summary>
+    /// The script a piece of text is clearly written in, or None when it is mixed or too short to tell. Alphabetic
+    /// scripts count by word and Chinese/Japanese/Korean by character (about one word each), so "率，kHz" is
+    /// mixed rather than English; 70% of the units must share a script (Japanese Han and Kana count as one).
+    /// </summary>
+    public static Script ClearScript(string text)
+    {
+        var c = new Dictionary<Script, int>();
+        Script previous = Script.None;
+        foreach (var ch in text)
+        {
+            var sc = ScriptOf(ch);
+            bool byChar = sc is Script.Han or Script.Kana or Script.Hangul;
+            if (sc != Script.None && (byChar || sc != previous)) c[sc] = c.GetValueOrDefault(sc) + 1;
+            previous = sc;
+        }
+        if (c.Remove(Script.Han, out int han)) c[c.ContainsKey(Script.Kana) ? Script.Kana : Script.Han] = c.GetValueOrDefault(Script.Kana) + han;
+        int total = c.Values.Sum();
+        if (total < 3) return Script.None;
+        var top = c.MaxBy(kv => kv.Value);
+        return top.Value >= total * 0.7 ? top.Key : Script.None;
+    }
+
     public static Script ScriptOfLanguage(string code) => code switch
     {
         "zh-CN" or "zh-TW" => Script.Han,

@@ -205,7 +205,13 @@ public partial class MainWindow : Window
             $"Source code and releases: {AppInfo.RepositoryUrl}\n\n" +
             "PDF Translator is built on open-source components (the .NET runtime, PDFium, PdfPig, PDFsharp, " +
             "Tesseract, PaddleOCR, ONNX Runtime, SkiaSharp and others). Their licences and notices are in " +
-            "THIRD-PARTY-NOTICES.txt in the program folder.",
+            "THIRD-PARTY-NOTICES.txt in the program folder.\n\n" +
+            "Disclaimer: PDF Translator is provided “as is”, without warranty of any kind. Translations are produced " +
+            "automatically by the service you choose and may be inaccurate, incomplete or lose formatting; check them " +
+            "before relying on them, especially for safety, legal, medical or technical instructions. The author accepts " +
+            "no liability for translation errors or for any loss arising from their use. Online services (Claude, " +
+            "DeepL, Google, Azure and others) may charge or use up your credits, quota or plan usage for every page " +
+            "translated, under your own account and their terms; you are responsible for that usage and its cost.",
             new ActionDialog.Action("Project on GitHub", () => Launch.Url(AppInfo.RepositoryUrl), ToolTip: AppInfo.RepositoryUrl),
             new ActionDialog.Action("Third-party notices", () =>
             {

@@ -148,7 +148,20 @@ public sealed class Rules
         double minW = Math.Min(upper.W, lower.W);
         return Horizontal.Any(h =>
             h.CenterY > upper.CenterY && h.CenterY < lower.CenterY &&
-            Math.Min(h.Right, x1) - Math.Max(h.X, x0) > minW * 0.5);
+            Math.Min(h.Right, x1) - Math.Max(h.X, x0) > minW * 0.5 &&
+            !IsUnderline(h, upper, lower));
+    }
+
+    /// <summary>
+    /// A line drawn under text (underlined words) rather than between rows: it hugs the upper line's bottom, stays
+    /// within that line's width, and is much nearer to it than to the next line. Table borders span the cell.
+    /// </summary>
+    static bool IsUnderline(RectD h, RectD upper, RectD lower)
+    {
+        double em = upper.H;
+        double toUpper = h.CenterY - upper.Bottom, toLower = lower.Y - h.CenterY;
+        bool withinText = h.X >= upper.X - 0.3 * em && h.Right <= upper.Right + 0.3 * em;
+        return withinText && toUpper < 0.3 * em && toLower > Math.Max(toUpper, 0) * 2 + 0.15 * em;
     }
 }
 
@@ -274,12 +287,25 @@ public static class LayoutBuilder
     public static List<TextRegion> BuildBlocks(List<LineSeg> lines, Rules rules, RegionSource origin, double pageWidth)
     {
         var blocks = new List<List<LineSeg>>();
+        var pitch = TypicalPitch(lines);
         foreach (var line in lines.OrderBy(l => l.Bounds.Y).ThenBy(l => l.Bounds.X))
         {
+            // A line with a label beside it on the same row ("Me:", "민호:", "Q1") starts a new entry, so
+            // dialogue and definition lists don't run speakers together.
+            bool labelled = lines.Any(o => !ReferenceEquals(o, line) && o.Bounds.Right <= line.Bounds.X + 0.5 &&
+                line.Bounds.X - o.Bounds.Right < 8 * line.Size && o.Bounds.W < 8 * line.Size &&
+                o.Text.TrimEnd() is { Length: > 0 and <= 16 } label && (label.EndsWith(':') || label.EndsWith('：')) &&
+                VerticalOverlap(o.Bounds, line.Bounds) > 0.5 * Math.Min(o.Bounds.H, line.Bounds.H));
+            // ...and the label itself ("나:" with its text to the right) never continues the entry above.
+            bool isLabel = line.Text.TrimEnd() is { Length: > 0 and <= 16 } own && (own.EndsWith(':') || own.EndsWith('：')) &&
+                lines.Any(o => !ReferenceEquals(o, line) && o.Bounds.X >= line.Bounds.Right - 0.5 &&
+                    o.Bounds.X - line.Bounds.Right < 8 * line.Size &&
+                    VerticalOverlap(o.Bounds, line.Bounds) > 0.5 * Math.Min(o.Bounds.H, line.Bounds.H));
             List<LineSeg>? best = null;
             double bestGap = double.MaxValue;
-            foreach (var block in blocks)
-                if (CanAppend(block, line, rules, origin != RegionSource.TextLayer, out double gap) && gap < bestGap) { best = block; bestGap = gap; }
+            if (!labelled && !isLabel)
+                foreach (var block in blocks)
+                    if (CanAppend(block, line, rules, origin != RegionSource.TextLayer, pitch, out double gap) && gap < bestGap) { best = block; bestGap = gap; }
             if (best != null) best.Add(line);
             else blocks.Add(new List<LineSeg> { line });
         }
@@ -288,7 +314,31 @@ public static class LayoutBuilder
 
     /// <param name="ocr">OCR lines: only tightly stacked lines (a wrapped label) belong together; stacked
     /// labels in diagrams sit further apart.</param>
-    static bool CanAppend(List<LineSeg> block, LineSeg line, Rules rules, bool ocr, out double gap)
+    /// <summary>
+    /// The usual distance from one line to the next for each text size on the page (median), so a blank line
+    /// between paragraphs is recognised even where it is smaller than the generic spacing limit. Only body
+    /// lines (at least half the widest line) count: table cells are packed more tightly than paragraphs.
+    /// </summary>
+    static Dictionary<double, double> TypicalPitch(List<LineSeg> lines)
+    {
+        var pitches = new Dictionary<double, List<double>>();
+        if (lines.Count == 0) return new();
+        double wide = 0.5 * lines.Max(l => l.Bounds.W);
+        var body = lines.Where(l => l.Bounds.W >= wide).ToList();
+        foreach (var l in body)
+        {
+            var next = body.Where(o => o.Bounds.Y > l.Bounds.Y + 0.5 * l.Size && Math.Abs(o.Size - l.Size) < 0.12 * l.Size &&
+                                        o.Bounds.HorizontalOverlap(l.Bounds) > 0)
+                            .MinBy(o => o.Bounds.Y);
+            if (next == null || next.Bounds.Y - l.Bounds.Y > 3 * l.Size) continue;
+            double key = Math.Round(l.Size);
+            (pitches.TryGetValue(key, out var list) ? list : pitches[key] = new()).Add(next.Bounds.Y - l.Bounds.Y);
+        }
+        return pitches.Where(kv => kv.Value.Count >= 4)
+                      .ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(v => v).ElementAt(kv.Value.Count / 2));
+    }
+
+    static bool CanAppend(List<LineSeg> block, LineSeg line, Rules rules, bool ocr, Dictionary<double, double> typicalPitch, out double gap)
     {
         var last = block[^1];
         var first = block[0];
@@ -300,9 +350,15 @@ public static class LayoutBuilder
         if (Math.Abs(line.Size - last.Size) > 0.12 * Math.Max(line.Size, last.Size)) return false;
         if (line.Bold != last.Bold || line.Italic != last.Italic) return false;
         if (line.BoldLead) return false;                                               // "Label: ..." starts an item
+        // Clearly more space than this page puts between the lines of a paragraph: a new paragraph.
+        if (typicalPitch.TryGetValue(Math.Round(last.Size), out double usual) && line.Bounds.Y - last.Bounds.Y > 1.4 * usual) return false;
         if (TextTools.StartsWithListMarker(line.Text)) return false;
         if (TextTools.HasLeader(last.Text) || TextTools.HasLeader(line.Text)) return false;   // contents lines
         if (rules.HorizontalBetween(last.Bounds, line.Bounds)) return false;
+        // A line in another script is a different text, e.g. the translation printed under the original.
+        var blockScript = TextTools.ClearScript(string.Concat(block.Select(l => l.Text)));
+        var lineScript = TextTools.ClearScript(line.Text);
+        if (blockScript != Script.None && lineScript != Script.None && blockScript != lineScript) return false;
 
         // Left edges line up (the first line may be indented, or hang left of the rest).
         double left = block.Count > 1 ? block[1].Bounds.X : first.Bounds.X;
@@ -310,7 +366,7 @@ public static class LayoutBuilder
         {
             // A numbered item or "Note: 1、" may wrap under its text rather than under the marker.
             double indent = first.Bounds.X - line.Bounds.X;
-            double hang = TextTools.StartsWithListMarker(first.Text) || first.BoldLead ? 4.5 : 1.2;
+            double hang = TextTools.StartsWithListMarker(first.Text) || first.BoldLead || StartsWithLabel(first.Text) ? 4.5 : 1.2;
             if (indent < -hang * size || indent > 4.5 * size) return false;
         }
         else if (Math.Abs(line.Bounds.X - left) > 1.2 * size) return false;
@@ -328,6 +384,11 @@ public static class LayoutBuilder
         }
         return line.Bounds.HorizontalOverlap(RectD.Union(block.Select(l => l.Bounds))) > 0;
     }
+
+    /// <summary>"Me: …", "민호: …": a short label and colon, with the text wrapping under the text.</summary>
+    static bool StartsWithLabel(string text) => System.Text.RegularExpressions.Regex.IsMatch(text, @"^\S{1,10}[:：]\s");
+
+    static double VerticalOverlap(RectD a, RectD b) => Math.Min(a.Bottom, b.Bottom) - Math.Max(a.Y, b.Y);
 
     static TextRegion ToRegion(List<LineSeg> lines, RegionSource origin, double pageWidth)
     {
