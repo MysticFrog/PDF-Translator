@@ -132,7 +132,7 @@ The icon is `Assets\PdfTranslator.ico`, generated from `PDF_TRANSLATE.png` by `t
 
 ## Licences
 
-Source: <https://github.com/MysticFrog/PDF-TRANSLATOR> (also linked from **About…** in the app).
+Source: <https://github.com/MysticFrog/PDF-Translator> (also linked from **About…** in the app).
 
 The app ships with open-source components under MIT, Apache-2.0, BSD and Boost licences: the .NET runtime, PDFium,
 PdfPig, PDFsharp, PDFtoImage, SkiaSharp, Tesseract and Leptonica, RapidOcrNet with the PaddleOCR models, ONNX Runtime,

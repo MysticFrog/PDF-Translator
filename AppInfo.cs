@@ -10,7 +10,7 @@ public static class AppInfo
     public static string Copyright { get; } =
         typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? "";
 
-    public const string RepositoryUrl = "https://github.com/MysticFrog/PDF-TRANSLATOR";
+    public const string RepositoryUrl = "https://github.com/MysticFrog/PDF-Translator";
 
     /// <summary>Licences of the bundled components, installed next to the program.</summary>
     public static string NoticesFile => Path.Combine(AppContext.BaseDirectory, "THIRD-PARTY-NOTICES.txt");
