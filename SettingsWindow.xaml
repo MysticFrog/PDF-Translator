@@ -25,6 +25,22 @@
                 <Style TargetType="TextBox"><Setter Property="Margin" Value="0,4" /><Setter Property="Padding" Value="3" /></Style>
                 <Style TargetType="PasswordBox"><Setter Property="Margin" Value="0,4" /><Setter Property="Padding" Value="3" /></Style>
                 <Style TargetType="Button"><Setter Property="Margin" Value="8,3,0,3" /><Setter Property="Padding" Value="8,2" /></Style>
+                <!-- Editable model list: the box holds the ID, the list shows what each one is. -->
+                <Style x:Key="ModelBox" TargetType="ComboBox">
+                    <Setter Property="Margin" Value="0,4" />
+                    <Setter Property="IsEditable" Value="True" />
+                    <Setter Property="TextSearch.TextPath" Value="Id" />
+                    <Setter Property="ItemTemplate">
+                        <Setter.Value>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Label}" MinWidth="250" Margin="0" />
+                                    <TextBlock Text="{Binding Id}" Foreground="#888" Margin="10,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
             </Grid.Resources>
 
             <TextBlock Grid.Row="0" Text="DeepL API key" />
@@ -56,7 +72,9 @@
             <PasswordBox Grid.Row="7" Grid.Column="1" x:Name="AnthropicKey" ToolTip="Leave empty to use the ANTHROPIC_API_KEY environment variable" />
             <Button Grid.Row="7" Grid.Column="2" Content="Get key…" Tag="https://console.anthropic.com/settings/keys" Click="Link_Click" />
             <TextBlock Grid.Row="8" Text="Claude model" />
-            <TextBox Grid.Row="8" Grid.Column="1" x:Name="AnthropicModel" />
+            <ComboBox Grid.Row="8" Grid.Column="1" x:Name="AnthropicModel" Style="{StaticResource ModelBox}"
+                      ToolTip="Pick a model, or type a model ID. With an API key the list comes from your account." />
+            <TextBlock Grid.Row="8" Grid.Column="2" x:Name="AnthropicModelSource" Foreground="#777" FontSize="11" Margin="8,0,0,0" />
 
             <TextBlock Grid.Row="9" Text="Claude Code path" />
             <TextBox Grid.Row="9" Grid.Column="1" x:Name="ClaudeCodePath" ToolTip="Leave empty to find it automatically" />
@@ -67,7 +85,8 @@
             <Button Grid.Row="10" Grid.Column="2" x:Name="GetTokenButton" Content="Get token…" Click="GetToken_Click"
                     ToolTip="Opens a terminal running: claude setup-token" />
             <TextBlock Grid.Row="11" Text="Claude Code model" />
-            <TextBox Grid.Row="11" Grid.Column="1" x:Name="ClaudeCodeModel" ToolTip="e.g. opus or sonnet; empty = Claude Code's default" />
+            <ComboBox Grid.Row="11" Grid.Column="1" x:Name="ClaudeCodeModel" Style="{StaticResource ModelBox}"
+                      ToolTip="An alias (opus, sonnet, haiku, fable) follows the latest model of that family; or pick a full model ID" />
 
             <TextBlock Grid.Row="12" Text="MCP server for Claude" />
             <StackPanel Grid.Row="12" Grid.Column="1" Orientation="Horizontal" Margin="0,4">

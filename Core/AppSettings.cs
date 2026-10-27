@@ -21,7 +21,7 @@ public sealed class AppSettings
     public string LibreKey { get; set; } = "";
     public string MyMemoryEmail { get; set; } = "";
     public string AnthropicKey { get; set; } = "";
-    public string AnthropicModel { get; set; } = "claude-opus-5-5";
+    public string AnthropicModel { get; set; } = PdfTranslator.Translators.ClaudeModels.DefaultApiModel;
     /// <summary>Path of the Claude Code CLI; empty = find it (PATH, ~/.local/bin, Claude Desktop's bundled copy).</summary>
     public string ClaudeCodePath { get; set; } = "";
     /// <summary>Model alias for Claude Code (e.g. opus, sonnet); empty = Claude Code's default.</summary>

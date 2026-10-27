@@ -50,7 +50,7 @@ public static class TranslatorFactory
         "azure" => new AzureTranslator(Require(id, s.AzureKey), s.AzureRegion),
         "claude" => new ClaudeTranslator(
             Require(id, string.IsNullOrWhiteSpace(s.AnthropicKey) ? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "" : s.AnthropicKey),
-            string.IsNullOrWhiteSpace(s.AnthropicModel) ? "claude-opus-5-5" : s.AnthropicModel.Trim()),
+            string.IsNullOrWhiteSpace(s.AnthropicModel) ? ClaudeModels.DefaultApiModel : s.AnthropicModel.Trim()),
         _ => throw new ArgumentException($"Unknown provider '{id}'."),
     };
 

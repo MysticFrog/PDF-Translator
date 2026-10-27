@@ -1,5 +1,6 @@
 using System.Windows;
 using PdfTranslator.Core;
+using PdfTranslator.Translators;
 
 namespace PdfTranslator;
 
@@ -19,11 +20,14 @@ public partial class SettingsWindow : Window
         LibreKey.Password = _s.LibreKey;
         MyMemoryEmail.Text = _s.MyMemoryEmail;
         AnthropicKey.Password = _s.AnthropicKey;
-        AnthropicModel.Text = _s.AnthropicModel;
+        AnthropicModel.ItemsSource = ClaudeModels.Api;
+        AnthropicModel.Text = string.IsNullOrWhiteSpace(_s.AnthropicModel) ? ClaudeModels.DefaultApiModel : _s.AnthropicModel;
+        AnthropicModelSource.Text = "built-in list";
         McpEnabled.IsChecked = _s.McpEnabled;
         OfflineStatus.Text = PdfTranslator.Translators.LocalLibre.Status();
         if (PdfTranslator.Translators.LocalLibre.IsInstalled) OfflineInstallButton.Content = "Repair…";
         ClaudeCodePath.Text = _s.ClaudeCodePath;
+        ClaudeCodeModel.ItemsSource = ClaudeModels.ClaudeCode;
         ClaudeCodeModel.Text = _s.ClaudeCodeModel;
         ClaudeCodeToken.Password = _s.ClaudeCodeToken;
         if (string.IsNullOrWhiteSpace(_s.ClaudeCodePath) && PdfTranslator.Translators.ClaudeCodeTranslator.Locate(null) is { } found)
@@ -38,6 +42,22 @@ public partial class SettingsWindow : Window
         {
             OcrLanguages.Text = "unavailable: " + ex.Message;
         }
+        Loaded += async (_, _) => await LoadAccountModelsAsync();
+    }
+
+    /// <summary>With an API key (saved or ANTHROPIC_API_KEY), list the models the account can use.</summary>
+    async Task LoadAccountModelsAsync()
+    {
+        string key = AnthropicKey.Password.Trim();
+        if (key.Length == 0) key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
+        if (key.Length == 0) return;
+        AnthropicModelSource.Text = "loading…";
+        var models = await ClaudeModels.ListAsync(key);
+        if (models is not { Count: > 0 }) { AnthropicModelSource.Text = "built-in list"; return; }
+        string current = AnthropicModel.Text;
+        AnthropicModel.ItemsSource = models;
+        AnthropicModel.Text = current;
+        AnthropicModelSource.Text = "from your account";
     }
 
     void Link_Click(object sender, RoutedEventArgs e)
@@ -79,7 +99,7 @@ public partial class SettingsWindow : Window
         _s.LibreKey = LibreKey.Password.Trim();
         _s.MyMemoryEmail = MyMemoryEmail.Text.Trim();
         _s.AnthropicKey = AnthropicKey.Password.Trim();
-        _s.AnthropicModel = string.IsNullOrWhiteSpace(AnthropicModel.Text) ? "claude-opus-5-5" : AnthropicModel.Text.Trim();
+        _s.AnthropicModel = string.IsNullOrWhiteSpace(AnthropicModel.Text) ? ClaudeModels.DefaultApiModel : AnthropicModel.Text.Trim();
         _s.McpEnabled = McpEnabled.IsChecked == true;
         _s.ClaudeCodePath = ClaudeCodePath.Text.Trim();
         _s.ClaudeCodeModel = ClaudeCodeModel.Text.Trim();
