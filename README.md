@@ -129,3 +129,16 @@ The icon is `Assets\PdfTranslator.ico`, generated from `PDF_TRANSLATE.png` by `t
 - No bidi/shaping for Arabic, Hebrew or Indic scripts (PDFsharp limitation).
 - Bold/italic inside a sentence (other than a leading `Label:`) is not carried over; the block takes its dominant style.
 - Text cut off at an image edge (e.g. "X9：编码") may not be detected; add it with Shift+drag or `add_block`.
+
+## Licences
+
+Source: <https://github.com/MysticFrog/PDF-TRANSLATOR> (also linked from **About…** in the app).
+
+The app ships with open-source components under MIT, Apache-2.0, BSD and Boost licences: the .NET runtime, PDFium,
+PdfPig, PDFsharp, PDFtoImage, SkiaSharp, Tesseract and Leptonica, RapidOcrNet with the PaddleOCR models, ONNX Runtime,
+Clipper2 and the Anthropic SDK. Their licences and notices are in `THIRD-PARTY-NOTICES.txt`, installed next to the
+program and opened from **About… › Third-party notices**. `build.ps1 -Installer` regenerates it from the restored
+packages (`tools\Notices.ps1`), so it always matches what ships.
+
+LibreTranslate (AGPL-3.0) is not bundled: the offline install downloads it from its official source onto the PC that
+uses it, where it runs as a separate program.

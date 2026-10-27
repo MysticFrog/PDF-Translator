@@ -34,6 +34,9 @@ $exe = Join-Path $buildDir "bin\$Configuration\net8.0-windows10.0.19041.0\win-x6
 Write-Host "Built: $exe"
 
 if ($Installer) {
+    # Third-party notices from the packages this build restored; published with the app.
+    & (Join-Path $root 'tools\Notices.ps1')
+
     # Version: from the csproj, plus the commit count when the sources are in git.
     $version = ([xml](Get-Content $project)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
     # Same stamp as GitVersion.targets gives the application: version.commits+hash[.dirty].

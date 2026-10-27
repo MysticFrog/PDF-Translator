@@ -195,6 +195,25 @@ public partial class MainWindow : Window
             new ActionDialog.Action("Use free MyMemory instead", () => UseProvider("mymemory"), CloseAfter: true));
     }
 
+    void About_Click(object sender, RoutedEventArgs e) => ShowAbout();
+
+    /// <summary>Version, the project page and the licences of the components it ships with.</summary>
+    internal void ShowAbout()
+    {
+        ActionDialog.Show(this, AppInfo.Name,
+            $"Version {AppInfo.Version}\n{AppInfo.Copyright}\n\n" +
+            $"Source code and releases: {AppInfo.RepositoryUrl}\n\n" +
+            "PDF Translator is built on open-source components (the .NET runtime, PDFium, PdfPig, PDFsharp, " +
+            "Tesseract, PaddleOCR, ONNX Runtime, SkiaSharp and others). Their licences and notices are in " +
+            "THIRD-PARTY-NOTICES.txt in the program folder.",
+            new ActionDialog.Action("Project on GitHub", () => Launch.Url(AppInfo.RepositoryUrl), ToolTip: AppInfo.RepositoryUrl),
+            new ActionDialog.Action("Third-party notices", () =>
+            {
+                if (File.Exists(AppInfo.NoticesFile)) Launch.Url(AppInfo.NoticesFile);
+                else MessageBox.Show(this, "THIRD-PARTY-NOTICES.txt is missing from " + AppContext.BaseDirectory, AppInfo.Name);
+            }, ToolTip: AppInfo.NoticesFile));
+    }
+
     /// <summary>Any other problem: the message (links clickable) and a way to Settings.</summary>
     void ShowProblem(string title, string message) =>
         ActionDialog.Show(this, title, message, new ActionDialog.Action("Open Settings", OpenSettingsSoon, CloseAfter: true));

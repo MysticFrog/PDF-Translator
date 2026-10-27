@@ -111,6 +111,9 @@ public static class Cli
                         case "offline":
                             w.ShowOfflineInstall();
                             break;
+                        case "about":
+                            w.ShowAbout();
+                            break;
                         default:
                             SaveWindowImage(new SettingsWindow(AppSettings.Load()), args[2]);
                             break;

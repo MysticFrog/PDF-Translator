@@ -28,6 +28,7 @@
                 <TextBlock Text="OCR" Style="{StaticResource Caption}" />
                 <ComboBox x:Name="OcrBox" Width="210" />
                 <Button Content="Settings…" Click="Settings_Click" Margin="8,0,2,0" />
+                <Button Content="About…" Click="About_Click" Margin="2,0,2,0" ToolTip="Version, project page and third-party licences" />
                 <Separator Margin="6,0" />
                 <Button x:Name="TranslatePageButton" Content="Translate page" Click="TranslatePage_Click" IsEnabled="False" />
                 <Button x:Name="TranslateAllButton" Content="Translate all" Click="TranslateAll_Click" IsEnabled="False" FontWeight="SemiBold" />
