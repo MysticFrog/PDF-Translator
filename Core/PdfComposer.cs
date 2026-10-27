@@ -85,6 +85,8 @@ public static class PdfComposer
         public double Size;
         public List<List<(string text, bool bold)>> Lines = new();
         public double Widest;
+        public double Hang;          // wrapped lines start this far right of Box.X (hanging indent)
+        public bool LabelTab;        // the first token is a label ("Me:"): the text after it starts at Hang
     }
 
     static void DrawPage(XGraphics gfx, PageResult page, string target)
@@ -143,6 +145,13 @@ public static class PdfComposer
             plan.Top = r.MinTop > 0 && r.MinTop < box.Y ? r.MinTop : box.Y;
             plan.MaxHeight = plan.Bottom - plan.Top;
         }
+        // Hanging indent from the source (left-aligned text only, and only while it leaves room to wrap).
+        if (r.Align == TextAlign.Left && r.Hang > 0 && r.Hang < plan.Width * 0.5)
+        {
+            plan.Hang = r.Hang;
+            var first = text.Split(' ', 2)[0];
+            plan.LabelTab = first.Length is > 1 and <= 12 && (first.EndsWith(':') || first.EndsWith('：'));
+        }
         double sourcePitch = r.LineCount > 1 ? r.Bounds.H / r.LineCount / r.FontSize : 1.2;
         plan.Pitch = Languages.IsCjk(target) ? Math.Clamp(sourcePitch, 1.1, 1.8) : Math.Clamp(sourcePitch, 1.12, 1.35);
         return plan;
@@ -170,15 +179,19 @@ public static class PdfComposer
         double curW = 0;
         p.Widest = 0;
 
+        // Lines after the first start at the hanging indent; a label on the first line tabs to it.
+        double Indent(int line) => line == 0 ? 0 : p.Hang;
         void Flush()
         {
             while (cur.Count > 0 && cur[^1].text.Trim().Length == 0) cur.RemoveAt(cur.Count - 1);
             if (cur.Count > 0) cur[^1] = (cur[^1].text.TrimEnd(), cur[^1].bold);
-            double w = cur.Sum(t => Measure(gfx, p, t.text, t.bold));
+            double w = Indent(p.Lines.Count) + cur.Sum(t => Measure(gfx, p, t.text, t.bold));
+            if (p.Lines.Count == 0 && p.LabelTab && cur.Count > 1)
+                w = Math.Max(w, p.Hang + cur.Skip(1).Sum(t => Measure(gfx, p, t.text, t.bold)));
             p.Widest = Math.Max(p.Widest, w);
             p.Lines.Add(cur);
             cur = new();
-            curW = 0;
+            curW = Indent(p.Lines.Count);
         }
 
         foreach (var run in p.Runs)
@@ -195,12 +208,14 @@ public static class PdfComposer
                         var t = token.TrimStart();
                         if (t.Length == 0) continue;
                         cur.Add((t, run.Bold));
-                        curW = Measure(gfx, p, t, run.Bold);
+                        curW += Measure(gfx, p, t, run.Bold);
                     }
                     else
                     {
                         cur.Add((token, run.Bold));
                         curW += w;
+                        // The label fits before the text column: the text continues from there.
+                        if (p.Lines.Count == 0 && cur.Count == 1 && p.LabelTab && curW < p.Hang) curW = p.Hang;
                     }
                 }
             }
@@ -265,17 +280,20 @@ public static class PdfComposer
 
         var brush = new XSolidBrush(XColor.FromArgb(r.TextColor.R, r.TextColor.G, r.TextColor.B));
         double y = top + size * 0.85;
-        foreach (var line in p.Lines)
+        for (int li = 0; li < p.Lines.Count; li++)
         {
+            var line = p.Lines[li];
             double lineW = line.Sum(t => Measure(gfx, p, t.text, t.bold));
             double x = p.Box.X + r.Align switch
             {
                 TextAlign.Center => (p.Width - lineW) / 2,
                 TextAlign.Right => p.Width - lineW,
-                _ => 0,
+                _ => li == 0 ? 0 : p.Hang,
             };
-            foreach (var (text, bold) in line)
+            for (int ti = 0; ti < line.Count; ti++)
             {
+                var (text, bold) = line[ti];
+                if (li == 0 && ti == 1 && p.LabelTab) x = Math.Max(x, p.Box.X + p.Hang);
                 if (text.Length == 0) continue;
                 if (IconOf(r, text) is { } icon)
                 {

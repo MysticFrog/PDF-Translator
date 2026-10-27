@@ -133,6 +133,20 @@ public static class TextTools
     /// <summary>True when the text starts like a list item or numbered heading.</summary>
     public static bool StartsWithListMarker(string text) => NumberPrefix.IsMatch(text);
 
+    /// <summary>
+    /// A bulleted item: a bullet symbol (•, ●, ■, ◆, ►, -, or a Symbol/Wingdings bullet from the private-use
+    /// area) followed by a space and text.
+    /// </summary>
+    public static bool StartsWithBullet(string text)
+    {
+        var t = text.TrimStart();
+        if (t.Length < 2) return false;
+        char c = t[0];
+        bool bullet = c is '•' or '●' or '○' or '■' or '□' or '◆' or '◇' or '▪' or '▫' or '►' or '▶' or '‣' or '⁃' or '·' or '-' or '–'
+                      || c is >= '\uF000' and <= '\uF0FF';
+        return bullet && (char.IsWhiteSpace(t[1]) || c is >= '\uF000' and <= '\uF0FF');
+    }
+
     /// <summary>Splits a leading list number off so it is not translated (MyMemory turns "二．" into "two.").</summary>
     public static (string prefix, string body) SplitNumbering(string text)
     {

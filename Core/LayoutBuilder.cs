@@ -352,7 +352,7 @@ public static class LayoutBuilder
         if (line.BoldLead) return false;                                               // "Label: ..." starts an item
         // Clearly more space than this page puts between the lines of a paragraph: a new paragraph.
         if (typicalPitch.TryGetValue(Math.Round(last.Size), out double usual) && line.Bounds.Y - last.Bounds.Y > 1.4 * usual) return false;
-        if (TextTools.StartsWithListMarker(line.Text)) return false;
+        if (TextTools.StartsWithListMarker(line.Text) || TextTools.StartsWithBullet(line.Text)) return false;
         if (TextTools.HasLeader(last.Text) || TextTools.HasLeader(line.Text)) return false;   // contents lines
         if (rules.HorizontalBetween(last.Bounds, line.Bounds)) return false;
         // A line in another script is a different text, e.g. the translation printed under the original.
@@ -366,8 +366,10 @@ public static class LayoutBuilder
         {
             // A numbered item or "Note: 1、" may wrap under its text rather than under the marker.
             double indent = first.Bounds.X - line.Bounds.X;
-            double hang = TextTools.StartsWithListMarker(first.Text) || first.BoldLead || StartsWithLabel(first.Text) ? 4.5 : 1.2;
-            if (indent < -hang * size || indent > 4.5 * size) return false;
+            double hang = TextTools.StartsWithListMarker(first.Text) || TextTools.StartsWithBullet(first.Text) || first.BoldLead || StartsWithLabel(first.Text) ? 4.5 : 1.2;
+            // "문자 <tab> “…": the wrapped line lines up with the text after a tab in the first line.
+            bool underTab = TabStops(first).Any(x => Math.Abs(x - line.Bounds.X) < 0.5 * size);
+            if ((indent < -hang * size && !underTab) || indent > 4.5 * size) return false;
         }
         else if (Math.Abs(line.Bounds.X - left) > 1.2 * size) return false;
 
@@ -385,8 +387,41 @@ public static class LayoutBuilder
         return line.Bounds.HorizontalOverlap(RectD.Union(block.Select(l => l.Bounds))) > 0;
     }
 
+    /// <summary>
+    /// Where text resumes after a tab-like gap near the start of a line ("문자    “내일…", "Me:   “…"): the
+    /// x of the first glyph after a gap wider than a space, within the first few ems and after a short lead.
+    /// </summary>
+    static IEnumerable<double> TabStops(LineSeg line)
+    {
+        var g = line.Glyphs;
+        for (int i = 1; i < g.Count && i <= 12; i++)
+        {
+            if (g[i].Box.X - line.Bounds.X > 10 * line.Size) yield break;
+            if (g[i].Text == Rules.InlineMarker || g[i - 1].Text == Rules.InlineMarker) continue;
+            if (g[i].Box.X - g[i - 1].Box.Right > 0.8 * line.Size) yield return g[i].Box.X;
+        }
+    }
+
     /// <summary>"Me: …", "민호: …": a short label and colon, with the text wrapping under the text.</summary>
     static bool StartsWithLabel(string text) => System.Text.RegularExpressions.Regex.IsMatch(text, @"^\S{1,10}[:：]\s");
+
+    /// <summary>
+    /// The block's hanging indent: where its wrapped lines start when that is right of the first line (numbered
+    /// items, "Label: text"), else the tab stop after a short lead on the first line; 0 for neither.
+    /// </summary>
+    static double HangOf(List<LineSeg> lines, RectD bounds)
+    {
+        var first = lines[0];
+        double size = first.Size;
+        if (lines.Count >= 2)
+        {
+            double rest = lines.Skip(1).Min(l => l.Bounds.X);
+            if (rest - first.Bounds.X > 0.5 * size && rest - first.Bounds.X < 10 * size) return rest - bounds.X;
+            return 0;
+        }
+        bool labelled = StartsWithLabel(first.Text) || TextTools.StartsWithListMarker(first.Text) || TextTools.StartsWithBullet(first.Text);
+        return labelled && TabStops(first).FirstOrDefault() is > 0 and var tab ? tab - bounds.X : 0;
+    }
 
     static double VerticalOverlap(RectD a, RectD b) => Math.Min(a.Bottom, b.Bottom) - Math.Max(a.Y, b.Y);
 
@@ -417,6 +452,7 @@ public static class LayoutBuilder
             region.Lines = region.Lines.Select(l => l with { Text = l.Text.Replace(Rules.InlineMarker, "{{?}}") }).ToList();
             region.Inlines = icons.Select(g => new InlineGraphic(g.Box, Array.Empty<byte>())).ToList();
         }
+        region.Hang = HangOf(lines, bounds);
         if (lines.Count == 1 && !TextTools.StartsWithListMarker(lines[0].Text) && Math.Abs(bounds.X + bounds.W / 2 - pageWidth / 2) < pageWidth * 0.025 && bounds.X > pageWidth * 0.15)
             region.Align = TextAlign.Center;
         return region;

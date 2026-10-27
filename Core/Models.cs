@@ -77,6 +77,11 @@ public sealed class TextRegion
     /// <summary>The block starts with a bold label ("Cause:", "原因分析：") followed by regular text.</summary>
     public bool BoldLead { get; set; }
     public TextAlign Align { get; set; }
+    /// <summary>
+    /// Hanging indent (points from the block's left edge): where wrapped lines start, under the text after a
+    /// label or list number ("Me:  “…", "1、…"). 0 when lines start at the left edge.
+    /// </summary>
+    public double Hang { get; set; }
     public string FontFamilyHint { get; set; } = "";
     public Rgb TextColor { get; set; } = Rgb.Black;
     public Rgb Background { get; set; } = Rgb.White;
