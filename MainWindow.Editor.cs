@@ -484,6 +484,9 @@ public partial class MainWindow
         if (_session == null || page == null || _cts != null) return;
         if (!TryCreateTranslator(out var translator)) return;
         if (translator == null) { SetStatus("No translation service selected; type the text or use Claude via MCP."); return; }
+        if (translator is LocalLibreTranslator)
+            try { await LocalLibre.EnsureRunningAsync(CurrentOptions().Source, CurrentOptions().Target, new Progress<string>(SetStatus), CancellationToken.None); }
+            catch (Exception ex) { ShowProblem("Offline LibreTranslate could not start", ex.Message); return; }
         _cts = new CancellationTokenSource();
         SetBusy(true);
         try

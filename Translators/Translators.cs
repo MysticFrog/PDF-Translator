@@ -27,7 +27,8 @@ public static class TranslatorFactory
     {
         new ProviderInfo("mymemory", "MyMemory (free)", "No key. Optional e-mail raises the daily quota (5,000 → 50,000 chars/day)."),
         new ProviderInfo("google-free", "Google Translate (free web endpoint)", "No key. Unofficial endpoint; Google may refuse it on some networks."),
-        new ProviderInfo("libre", "LibreTranslate", "Server URL (self-hosted or libretranslate.com) and optional key."),
+        new ProviderInfo("libre-local", "LibreTranslate offline (on this PC)", "Free and private: runs LibreTranslate on this PC, no internet needed after the one-time install (Settings › Offline translation)."),
+        new ProviderInfo("libre", "LibreTranslate (server)", "Server URL (self-hosted or libretranslate.com) and optional key."),
         new ProviderInfo("deepl", "DeepL API", "DeepL API key (Free keys end in :fx)."),
         new ProviderInfo("google-cloud", "Google Cloud Translation", "Google Cloud API key."),
         new ProviderInfo("azure", "Microsoft Translator (Azure)", "Azure Translator key and region."),
@@ -42,18 +43,58 @@ public static class TranslatorFactory
         "claude-code" => new ClaudeCodeTranslator(s.ClaudeCodePath, s.ClaudeCodeModel, s.ClaudeCodeToken),
         "google-free" => new GoogleFreeTranslator(),
         "mymemory" => new MyMemoryTranslator(s.MyMemoryEmail),
-        "libre" => new LibreTranslator(Require(s.LibreUrl, "LibreTranslate URL"), s.LibreKey),
-        "deepl" => new DeepLTranslator(Require(s.DeepLKey, "DeepL API key")),
-        "google-cloud" => new GoogleCloudTranslator(Require(s.GoogleCloudKey, "Google Cloud API key")),
-        "azure" => new AzureTranslator(Require(s.AzureKey, "Azure Translator key"), s.AzureRegion),
+        "libre-local" => LocalLibre.IsInstalled ? new LocalLibreTranslator() : throw new LocalLibreMissingException(),
+        "libre" => new LibreTranslator(Require(id, s.LibreUrl), s.LibreKey),
+        "deepl" => new DeepLTranslator(Require(id, s.DeepLKey)),
+        "google-cloud" => new GoogleCloudTranslator(Require(id, s.GoogleCloudKey)),
+        "azure" => new AzureTranslator(Require(id, s.AzureKey), s.AzureRegion),
         "claude" => new ClaudeTranslator(
-            string.IsNullOrWhiteSpace(s.AnthropicKey) ? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "" : s.AnthropicKey,
+            Require(id, string.IsNullOrWhiteSpace(s.AnthropicKey) ? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "" : s.AnthropicKey),
             string.IsNullOrWhiteSpace(s.AnthropicModel) ? "claude-opus-5-5" : s.AnthropicModel.Trim()),
         _ => throw new ArgumentException($"Unknown provider '{id}'."),
     };
 
-    static string Require(string value, string what) =>
-        string.IsNullOrWhiteSpace(value) ? throw new InvalidOperationException($"{what} is not set. Open Settings to enter it.") : value.Trim();
+    static string Require(string provider, string value) =>
+        string.IsNullOrWhiteSpace(value) ? throw new MissingKeyException(KeyHelp.For(provider)) : value.Trim();
+}
+
+/// <summary>How to get the key a service needs: shown with buttons when it is missing.</summary>
+public sealed record KeyHelp(string Service, string What, string Url, string LinkLabel, string Steps)
+{
+    public static KeyHelp For(string provider) => provider switch
+    {
+        "deepl" => new("DeepL", "a DeepL API key", "https://www.deepl.com/your-account/keys", "Get a DeepL key",
+            "DeepL API Free translates 500,000 characters a month at no cost.\n" +
+            "1.  Click “Get a DeepL key”, sign up for DeepL API Free (or sign in).\n" +
+            "2.  Copy the key under Account › API Keys (Free keys end in “:fx”).\n" +
+            "3.  Click “Open Settings”, paste it into “DeepL API key” and Save."),
+        "google-cloud" => new("Google Cloud Translation", "a Google Cloud API key", "https://console.cloud.google.com/apis/credentials",
+            "Open Google Cloud",
+            "The first 500,000 characters a month are free; a billing account is required.\n" +
+            "1.  Enable the Cloud Translation API: https://console.cloud.google.com/apis/library/translate.googleapis.com\n" +
+            "2.  Click “Open Google Cloud” › Create credentials › API key, and copy it.\n" +
+            "3.  Click “Open Settings”, paste it into “Google Cloud API key” and Save."),
+        "azure" => new("Microsoft Translator", "an Azure Translator key", "https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation",
+            "Create a Translator",
+            "The free F0 tier translates 2 million characters a month.\n" +
+            "1.  Click “Create a Translator” and create the resource (pricing tier F0).\n" +
+            "2.  Open it › Keys and Endpoint: copy KEY 1 and the Location/Region.\n" +
+            "3.  Click “Open Settings”, paste them into “Azure Translator key” and “Azure region”, and Save."),
+        "libre" => new("LibreTranslate", "a LibreTranslate server address", "https://portal.libretranslate.com", "Get a libretranslate.com key",
+            "Enter the address of a LibreTranslate server in Settings. libretranslate.com needs a paid API key.\n" +
+            "For free, offline translation choose “LibreTranslate offline (on this PC)” instead."),
+        "claude" => new("Claude (Anthropic API)", "an Anthropic API key", "https://console.anthropic.com/settings/keys", "Get an Anthropic key",
+            "1.  Click “Get an Anthropic key”, sign in to the Claude Console and create a key.\n" +
+            "2.  Click “Open Settings”, paste it into “Anthropic API key” and Save.\n" +
+            "No API key? Choose “Claude (Claude Code sign-in)” to use your Claude account instead."),
+        _ => new(provider, "a key", "", "", "Open Settings and enter it."),
+    };
+}
+
+/// <summary>A service was chosen whose key/address is not set; the UI shows <see cref="KeyHelp"/> with buttons.</summary>
+public sealed class MissingKeyException(KeyHelp help) : InvalidOperationException($"{help.Service} needs {help.What}.")
+{
+    public KeyHelp Help { get; } = help;
 }
 
 /// <summary>Shared HTTP plumbing: one HttpClient, bounded parallelism, retry on 429/5xx.</summary>
@@ -214,10 +255,28 @@ public sealed class LibreTranslator(string baseUrl, string apiKey) : HttpTransla
     public override string Id => "libre";
     public override string DisplayName => "LibreTranslate";
 
-    static string Code(string c) => c switch { "zh-CN" => "zh", "zh-TW" => "zt", _ => c };
+    HashSet<string>? _languages;
+
+    /// <summary>The server's spelling of a language code (newer LibreTranslate: zh-Hans / zh-Hant; older: zh / zt).</summary>
+    async Task<string> CodeAsync(string c, CancellationToken ct)
+    {
+        if (c == Languages.Auto) return "auto";
+        if (_languages == null)
+        {
+            try
+            {
+                var body = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, baseUrl.TrimEnd('/') + "/languages"), ct);
+                _languages = JsonNode.Parse(body)!.AsArray().Select(n => n!["code"]!.GetValue<string>()).ToHashSet();
+            }
+            catch (HttpRequestException) { _languages = new(); }
+        }
+        var candidates = LocalLibre.Codes(c);
+        return candidates.FirstOrDefault(_languages.Contains) ?? candidates[^1];
+    }
 
     public override async Task<IReadOnlyList<string>> TranslateAsync(IReadOnlyList<string> texts, string from, string to, CancellationToken ct)
     {
+        string source = await CodeAsync(from, ct), target = await CodeAsync(to, ct);
         var results = new string[texts.Count];
         string url = baseUrl.TrimEnd('/') + "/translate";
         foreach (var batch in Batches(texts, 25, 8000))
@@ -225,8 +284,8 @@ public sealed class LibreTranslator(string baseUrl, string apiKey) : HttpTransla
             var payload = new JsonObject
             {
                 ["q"] = new JsonArray(batch.Select(b => (JsonNode?)b.text).ToArray()),
-                ["source"] = Code(from),
-                ["target"] = Code(to),
+                ["source"] = source,
+                ["target"] = target,
                 ["format"] = "text",
             };
             if (!string.IsNullOrWhiteSpace(apiKey)) payload["api_key"] = apiKey.Trim();

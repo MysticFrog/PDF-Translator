@@ -145,6 +145,18 @@ public static class PageRenderer
         return n == 0 ? 0 : (double)ink / n;
     }
 
+    /// <summary>PNG of one area of a rendered page (points).</summary>
+    public static byte[] CropPng(RasterPage page, RectD area)
+    {
+        double s = page.Scale;
+        int x0 = Math.Clamp((int)(area.X * s), 0, page.Width - 1), y0 = Math.Clamp((int)(area.Y * s), 0, page.Height - 1);
+        int w = Math.Clamp((int)Math.Ceiling(area.W * s), 1, page.Width - x0), h = Math.Clamp((int)Math.Ceiling(area.H * s), 1, page.Height - y0);
+        var bgra = new byte[w * h * 4];
+        for (int y = 0; y < h; y++)
+            Array.Copy(page.Bgra, ((y0 + y) * page.Width + x0) * 4, bgra, y * w * 4, w * 4);
+        return ToPng(new RasterPage { Width = w, Height = h, Bgra = bgra, Scale = s });
+    }
+
     public static byte[] ToPng(RasterPage r)
     {
         var info = new SKImageInfo(r.Width, r.Height, SKColorType.Bgra8888, SKAlphaType.Premul);

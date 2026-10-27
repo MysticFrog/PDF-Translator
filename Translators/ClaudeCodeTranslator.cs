@@ -101,6 +101,7 @@ public sealed class ClaudeCodeTranslator : ITranslator
             "Standard input is a JSON array of text blocks from one page, in reading order. Translate every block " +
             "faithfully, using neighbouring blocks as context. Keep numbers, units, part numbers, codes, URLs and proper " +
             "names unchanged. Keep each translation about as long as its source, because it must fit the original layout box. " +
+            "Placeholders like {{1}} stand for icons inside the sentence: keep each exactly once, at the matching place. " +
             "If a block is already in the target language or is not translatable, return it unchanged. " +
             "Reply with only a JSON array of strings, the same length and order as the input, and nothing else.";
 

@@ -40,9 +40,19 @@ public sealed class Rules
 
     public IEnumerable<RectD> All => Horizontal.Concat(Vertical);
 
+    /// <summary>Marks a graphic inside a line of text; replaced by {{n}} placeholders in the block's text.</summary>
+    public const string InlineMarker = "\uFFFC";
+
+    /// <summary>
+    /// Ink found in a gap of a text line (gap rectangle in points, font size) - an icon drawn in the sentence.
+    /// Null when the gap is empty. Set by <see cref="Detect"/> from the rendered page.
+    /// </summary>
+    public Func<RectD, double, RectD?>? InlineGraphicAt { get; private set; }
+
     public static Rules Detect(RasterPage page)
     {
         var rules = new Rules();
+        rules.InlineGraphicAt = (gap, size) => InkBounds(page, gap);
         double s = page.Scale;
         int minLen = (int)(18 * s);          // at least 18pt long
         double maxThick = 3.2 * s;           // at most ~3pt thick (thicker = filled shape, not a rule)
@@ -107,6 +117,26 @@ public sealed class Rules
         return rules;
     }
 
+    /// <summary>Bounding box of the ink inside <paramref name="area"/> (points), or null when it is blank.</summary>
+    static RectD? InkBounds(RasterPage page, RectD area)
+    {
+        double s = page.Scale;
+        int x0 = Math.Max(0, (int)Math.Ceiling(area.X * s)), x1 = Math.Min(page.Width - 1, (int)(area.Right * s));
+        int y0 = Math.Max(0, (int)(area.Y * s)), y1 = Math.Min(page.Height - 1, (int)Math.Ceiling(area.Bottom * s));
+        int bx0 = int.MaxValue, by0 = int.MaxValue, bx1 = -1, by1 = -1;
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+                if (page.Luma(x, y) < 170)
+                {
+                    if (x < bx0) bx0 = x;
+                    if (x > bx1) bx1 = x;
+                    if (y < by0) by0 = y;
+                    if (y > by1) by1 = y;
+                }
+        if (bx1 < 0) return null;
+        return new RectD(bx0 / s, by0 / s, (bx1 - bx0 + 1) / s, (by1 - by0 + 1) / s);
+    }
+
     /// <summary>A vertical rule runs between x-positions <paramref name="x0"/> and <paramref name="x1"/> at height y.</summary>
     public bool VerticalBetween(double x0, double x1, double y) =>
         Vertical.Any(v => v.X + v.W / 2 > x0 - 0.5 && v.X + v.W / 2 < x1 + 0.5 && v.Y <= y && v.Bottom >= y);
@@ -166,7 +196,20 @@ public static class LayoutBuilder
                 double gap = g.Box.X - prev.Box.Right;
                 double cy = (prev.Box.CenterY + g.Box.CenterY) / 2;
                 bool sizeJump = Math.Max(prev.Size, g.Size) / Math.Max(0.1, Math.Min(prev.Size, g.Size)) > 1.6;
-                if (gap > 1.6 * size || rules.VerticalBetween(prev.Box.Right, g.Box.X, cy) || sizeJump && gap > 0.5 * size)
+                bool rule = rules.VerticalBetween(prev.Box.Right, g.Box.X, cy);
+                if (gap > 1.6 * size && !rule && gap < 10 * size && rules.InlineGraphicAt != null)
+                {
+                    // An icon drawn inside the sentence ("press the ▲ key"): keep the line whole and mark the icon.
+                    double top = Math.Min(prev.Box.Y, g.Box.Y) - 0.45 * size, bottom = Math.Max(prev.Box.Bottom, g.Box.Bottom) + 0.45 * size;
+                    var ink = rules.InlineGraphicAt(new RectD(prev.Box.Right + 0.5, top, gap - 1, bottom - top), size);
+                    if (ink is { } icon && icon.W >= 0.5 * size && icon.H >= 0.4 * size && icon.H <= 2.4 * size)
+                    {
+                        seg.Add(new Glyph { Box = icon, Text = Rules.InlineMarker, Size = size, Baseline = prev.Baseline, Color = prev.Color, Font = prev.Font });
+                        seg.Add(g);
+                        continue;
+                    }
+                }
+                if (gap > 1.6 * size || rule || sizeJump && gap > 0.5 * size)
                 {
                     yield return Finish(seg);
                     seg = new();
@@ -179,7 +222,12 @@ public static class LayoutBuilder
 
     static LineSeg Finish(List<Glyph> glyphs)
     {
-        var line = new LineSeg { Glyphs = glyphs, Bounds = RectD.Union(glyphs.Select(g => g.Box)) };
+        // Line geometry comes from the text: a taller inline icon must not shift the line's top or bottom,
+        // or line spacing looks uneven and the paragraph splits. The icons still widen it sideways.
+        var all = RectD.Union(glyphs.Select(g => g.Box));
+        var text = glyphs.Where(g => g.Text != Rules.InlineMarker).ToList();
+        var bounds = text.Count == 0 ? all : RectD.Union(text.Select(g => g.Box));
+        var line = new LineSeg { Glyphs = glyphs, Bounds = new RectD(all.X, bounds.Y, all.W, bounds.H) };
 
         // Text with spaces restored from gaps (many PDFs position words without space glyphs).
         var sb = new StringBuilder();
@@ -197,7 +245,8 @@ public static class LayoutBuilder
             }
             sb.Append(g.Text);
         }
-        line.Text = sb.ToString().Trim();
+        // Icons read as their own word: " {{n}} " (numbered when the block is assembled).
+        line.Text = sb.ToString().Replace(Rules.InlineMarker, " " + Rules.InlineMarker + " ").Replace("  ", " ").Trim();
 
         // Dominant style by character count.
         int total = glyphs.Sum(g => g.Text.Length);
@@ -259,8 +308,10 @@ public static class LayoutBuilder
         double left = block.Count > 1 ? block[1].Bounds.X : first.Bounds.X;
         if (block.Count == 1)
         {
+            // A numbered item or "Note: 1、" may wrap under its text rather than under the marker.
             double indent = first.Bounds.X - line.Bounds.X;
-            if (indent < -1.2 * size || indent > 4.5 * size) return false;
+            double hang = TextTools.StartsWithListMarker(first.Text) || first.BoldLead ? 4.5 : 1.2;
+            if (indent < -hang * size || indent > 4.5 * size) return false;
         }
         else if (Math.Abs(line.Bounds.X - left) > 1.2 * size) return false;
 
@@ -280,7 +331,8 @@ public static class LayoutBuilder
 
     static TextRegion ToRegion(List<LineSeg> lines, RegionSource origin, double pageWidth)
     {
-        var bounds = RectD.Union(lines.Select(l => l.Bounds));
+        // The block covers its inline icons too, so the originals are painted over.
+        var bounds = RectD.Union(lines.Select(l => l.Bounds).Concat(lines.SelectMany(l => l.Glyphs).Select(g => g.Box)));
         var region = new TextRegion
         {
             Bounds = bounds,
@@ -295,7 +347,16 @@ public static class LayoutBuilder
             FontFamilyHint = lines[0].Font,
             Origin = origin,
         };
-        if (lines.Count == 1 && Math.Abs(bounds.X + bounds.W / 2 - pageWidth / 2) < pageWidth * 0.025 && bounds.X > pageWidth * 0.15)
+        // Number the inline icons in reading order: {{1}}, {{2}}…
+        var icons = lines.SelectMany(l => l.Glyphs).Where(g => g.Text == Rules.InlineMarker).ToList();
+        if (icons.Count > 0)
+        {
+            int n = 0;
+            region.Source = System.Text.RegularExpressions.Regex.Replace(region.Source, Rules.InlineMarker, _ => "{{" + ++n + "}}");
+            region.Lines = region.Lines.Select(l => l with { Text = l.Text.Replace(Rules.InlineMarker, "{{?}}") }).ToList();
+            region.Inlines = icons.Select(g => new InlineGraphic(g.Box, Array.Empty<byte>())).ToList();
+        }
+        if (lines.Count == 1 && !TextTools.StartsWithListMarker(lines[0].Text) && Math.Abs(bounds.X + bounds.W / 2 - pageWidth / 2) < pageWidth * 0.025 && bounds.X > pageWidth * 0.15)
             region.Align = TextAlign.Center;
         return region;
     }

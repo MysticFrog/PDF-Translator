@@ -207,8 +207,31 @@ public static class PdfComposer
         if (cur.Count > 0) Flush();
     }
 
-    static double Measure(XGraphics gfx, Plan p, string text, bool bold) =>
-        text.Length == 0 ? 0 : gfx.MeasureString(text, MakeFont(p.Family, p.Size, Style(p.Region, bold))).Width;
+    static double Measure(XGraphics gfx, Plan p, string text, bool bold)
+    {
+        if (text.Length == 0) return 0;
+        if (IconOf(p.Region, text) is { } icon)
+        {
+            double w = IconSize(p, icon).w;
+            return text.EndsWith(' ') ? w + gfx.MeasureString(" ", MakeFont(p.Family, p.Size, Style(p.Region, bold))).Width : w;
+        }
+        return gfx.MeasureString(text, MakeFont(p.Family, p.Size, Style(p.Region, bold))).Width;
+    }
+
+    /// <summary>The inline icon a {{n}} token refers to, or null for ordinary text.</summary>
+    static InlineGraphic? IconOf(TextRegion r, string token)
+    {
+        var t = token.Trim();
+        if (t.Length < 5 || !t.StartsWith("{{") || !t.EndsWith("}}") || !int.TryParse(t[2..^2], out int n)) return null;
+        return n >= 1 && n <= r.Inlines.Count && r.Inlines[n - 1].Png.Length > 0 ? r.Inlines[n - 1] : null;
+    }
+
+    /// <summary>Icons scale with the text: same ratio to the output size as they had to the source size.</summary>
+    static (double w, double h) IconSize(Plan p, InlineGraphic icon)
+    {
+        double k = p.Size / Math.Max(1, p.Region.FontSize);
+        return (icon.Bounds.W * k, icon.Bounds.H * k);
+    }
 
     static void Draw(XGraphics gfx, Plan p)
     {
@@ -254,6 +277,15 @@ public static class PdfComposer
             foreach (var (text, bold) in line)
             {
                 if (text.Length == 0) continue;
+                if (IconOf(r, text) is { } icon)
+                {
+                    // Centred on the text's x-height band, the way it sat in the source line.
+                    var (iw, ih) = IconSize(p, icon);
+                    using (var img = XImage.FromStream(Streams.Exposable(icon.Png)))
+                        gfx.DrawImage(img, x, y - size * 0.35 - ih / 2, iw, ih);
+                    x += Measure(gfx, p, text, bold);
+                    continue;
+                }
                 var font = MakeFont(p.Family, size, Style(r, bold));
                 gfx.DrawString(text, font, brush, x, y, XStringFormats.BaseLineLeft);
                 x += gfx.MeasureString(text, font).Width;
@@ -383,8 +415,17 @@ public static class PdfComposer
         }
     }
 
-    /// <summary>Word tokens with their trailing space; CJK characters are individual breakable tokens.</summary>
+    /// <summary>Word tokens with their trailing space; CJK characters and {{n}} icons are individual tokens.</summary>
     static IEnumerable<string> Tokens(string s)
+    {
+        foreach (var (part, icon) in TextTools.SplitInline(s))
+        {
+            if (icon > 0) { yield return part; continue; }
+            foreach (var t in TextTokens(part)) yield return t;
+        }
+    }
+
+    static IEnumerable<string> TextTokens(string s)
     {
         var sb = new StringBuilder();
         var e = StringInfo.GetTextElementEnumerator(s);

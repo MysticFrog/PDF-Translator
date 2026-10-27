@@ -49,7 +49,7 @@ public partial class MainWindow : Window
         OutlinesBox.IsChecked = _settings.ShowBlockOutlines;
 
         Loaded += (_, _) => StartMcp();
-        Closing += (_, _) => { SaveChoices(); _cts?.Cancel(); _mcp?.Dispose(); };
+        Closing += (_, _) => { SaveChoices(); _cts?.Cancel(); _mcp?.Dispose(); LocalLibre.Stop(); };
     }
 
     // ---------------------------------------------------------------- file
@@ -154,9 +154,50 @@ public partial class MainWindow : Window
     /// <summary>Errors with a fix the app can start (Claude Code sign-in) get buttons; the rest a message box.</summary>
     void ShowError(Exception ex)
     {
-        if (ex is ClaudeCodeSetupException setup) ShowClaudeCodeSetup(setup);
-        else MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        switch (ex)
+        {
+            case ClaudeCodeSetupException setup: ShowClaudeCodeSetup(setup); break;
+            case MissingKeyException missing: ShowMissingKey(missing.Help); break;
+            case LocalLibreMissingException: ShowOfflineInstall(); break;
+            default: ShowProblem("Something went wrong", ex.Message); break;
+        }
     }
+
+    void OpenSettingsSoon() => Dispatcher.InvokeAsync(() => Settings_Click(this, new RoutedEventArgs()));
+
+    void UseProvider(string id)
+    {
+        ProviderBox.SelectedItem = TranslatorFactory.Providers.FirstOrDefault(p => p.Id == id) ?? ProviderBox.SelectedItem;
+        SaveChoices();
+        SetStatus($"Service: {((ProviderInfo)ProviderBox.SelectedItem).Name}. Press Translate again.");
+    }
+
+    /// <summary>A service needs a key: say how to get one, with the page, Settings and a free alternative a click away.</summary>
+    internal void ShowMissingKey(KeyHelp help)
+    {
+        var actions = new List<ActionDialog.Action>();
+        if (help.Url.Length > 0) actions.Add(new(help.LinkLabel, () => Launch.Url(help.Url), ToolTip: help.Url));
+        actions.Add(new("Open Settings", OpenSettingsSoon, CloseAfter: true));
+        actions.Add(new("Use free MyMemory instead", () => UseProvider("mymemory"), CloseAfter: true));
+        ActionDialog.Show(this, $"{help.Service} needs {help.What}", help.Steps, actions.ToArray());
+    }
+
+    /// <summary>Offline LibreTranslate chosen but not installed.</summary>
+    internal void ShowOfflineInstall()
+    {
+        ActionDialog.Show(this, "Install offline translation",
+            "“LibreTranslate offline” translates on this PC: free, private, and no internet needed after setup.\n\n" +
+            "Install downloads LibreTranslate (" + LocalLibre.ProjectUrl + ") with its own private Python into " +
+            LocalLibre.Folder + " — about 1 GB, a few minutes. A window shows the progress; when it says Done, press Translate.\n" +
+            "Each new language pair downloads its model (~100 MB) the first time it is used.",
+            new ActionDialog.Action("Install", LocalLibre.StartInstall, ToolTip: "Opens a window running the install script"),
+            new ActionDialog.Action("Project page", () => Launch.Url(LocalLibre.ProjectUrl)),
+            new ActionDialog.Action("Use free MyMemory instead", () => UseProvider("mymemory"), CloseAfter: true));
+    }
+
+    /// <summary>Any other problem: the message (links clickable) and a way to Settings.</summary>
+    void ShowProblem(string title, string message) =>
+        ActionDialog.Show(this, title, message, new ActionDialog.Action("Open Settings", OpenSettingsSoon, CloseAfter: true));
 
     internal void ShowClaudeCodeSetup(ClaudeCodeSetupException ex)
     {
@@ -197,6 +238,16 @@ public partial class MainWindow : Window
         if (!TryCreateTranslator(out var translator)) return;
         var opt = CurrentOptions();
         if (opt.Source == opt.Target) { MessageBox.Show(this, "Source and target language are the same.", Title); return; }
+        if (translator is LocalLibreTranslator)
+        {
+            // Start (and on first use, download models for) the local server here, so progress shows in the status bar.
+            _cts = new CancellationTokenSource();
+            SetBusy(true);
+            try { await LocalLibre.EnsureRunningAsync(opt.Source, opt.Target, new Progress<string>(SetStatus), _cts.Token); }
+            catch (OperationCanceledException) { SetStatus("Cancelled."); return; }
+            catch (Exception ex) { ShowProblem("Offline LibreTranslate could not start", ex.Message); return; }
+            finally { _cts.Dispose(); _cts = null; SetBusy(false); }
+        }
         if (translator == null)
             SetStatus("“Extract only” finds blocks without translating. To translate with Claude, pick “Claude (Claude Code sign-in)”, " +
                       "or ask Claude in Claude Code to translate the open PDF (MCP).");
@@ -210,7 +261,7 @@ public partial class MainWindow : Window
         var log = new Progress<string>(SetStatus);
         var errors = new List<string>();
         var notes = new List<string>();
-        ClaudeCodeSetupException? setupProblem = null;
+        Exception? setupProblem = null;
         try
         {
             foreach (var index in pages)
@@ -224,7 +275,7 @@ public partial class MainWindow : Window
                     if (result.Note != null) notes.Add($"Page {index + 1}: {result.Note}");
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (ClaudeCodeSetupException ex)
+                catch (Exception ex) when (ex is ClaudeCodeSetupException or MissingKeyException or LocalLibreMissingException)
                 {
                     // Every page would fail the same way; stop and offer the fix.
                     setupProblem = ex;
@@ -246,9 +297,10 @@ public partial class MainWindow : Window
             SetStatus(errors.Count == 0
                 ? $"{what}: {pages.Count} page(s)." + (notes.Count > 0 ? $"  ⚠ {notes[0]}" : "")
                 : $"Finished with {errors.Count} error(s). {errors[0]}");
-            if (setupProblem != null) ShowClaudeCodeSetup(setupProblem);
+            if (setupProblem != null) ShowError(setupProblem);
             else if (errors.Count > 0)
-                MessageBox.Show(this, string.Join("\n", errors.Concat(notes).Take(12)), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowProblem(errors.Count == 1 ? "Translation stopped" : $"{errors.Count} problems while translating",
+                    string.Join("\n", errors.Concat(notes).Take(12)));
         }
         catch (OperationCanceledException)
         {

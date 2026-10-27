@@ -21,6 +21,8 @@ public partial class SettingsWindow : Window
         AnthropicKey.Password = _s.AnthropicKey;
         AnthropicModel.Text = _s.AnthropicModel;
         McpEnabled.IsChecked = _s.McpEnabled;
+        OfflineStatus.Text = PdfTranslator.Translators.LocalLibre.Status();
+        if (PdfTranslator.Translators.LocalLibre.IsInstalled) OfflineInstallButton.Content = "Repair…";
         ClaudeCodePath.Text = _s.ClaudeCodePath;
         ClaudeCodeModel.Text = _s.ClaudeCodeModel;
         ClaudeCodeToken.Password = _s.ClaudeCodeToken;
@@ -47,6 +49,12 @@ public partial class SettingsWindow : Window
     {
         var url = LibreUrl.Text.Trim();
         if (Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https")) Launch.Url(url);
+    }
+
+    void OfflineInstall_Click(object sender, RoutedEventArgs e)
+    {
+        PdfTranslator.Translators.LocalLibre.StartInstall();
+        OfflineStatus.Text = "Installing in the window that opened… when it says Done, choose “LibreTranslate offline (on this PC)”.";
     }
 
     void GetToken_Click(object sender, RoutedEventArgs e)

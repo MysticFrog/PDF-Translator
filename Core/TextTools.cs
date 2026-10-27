@@ -169,6 +169,42 @@ public static class TextTools
         return 0;
     }
 
+    // ------------------------------------------------------------------ inline icons
+
+    static readonly Regex InlineToken = new(@"\{\s*\{\s*(\d+)\s*\}\s*\}|\{(\d+)\}");
+
+    /// <summary>
+    /// Puts icon placeholders back into canonical form ({{1}}) after translation and appends any the translator
+    /// dropped, so every icon is drawn once.
+    /// </summary>
+    public static string RestoreInlineTokens(string text, int count)
+    {
+        if (count == 0) return text;
+        var seen = new HashSet<int>();
+        text = InlineToken.Replace(text, m =>
+        {
+            int n = int.Parse(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
+            if (n < 1 || n > count || !seen.Add(n)) return "";
+            return "{{" + n + "}}";
+        });
+        for (int n = 1; n <= count; n++)
+            if (!seen.Contains(n)) text = text.TrimEnd() + " {{" + n + "}}";
+        return Regex.Replace(text, @"[ \t]{2,}", " ").Trim();
+    }
+
+    /// <summary>Splits text into plain runs and {{n}} icon tokens.</summary>
+    public static IEnumerable<(string text, int icon)> SplitInline(string text)
+    {
+        int pos = 0;
+        foreach (Match m in Regex.Matches(text, @"\{\{(\d+)\}\}"))
+        {
+            if (m.Index > pos) yield return (text[pos..m.Index], 0);
+            yield return (m.Value, int.Parse(m.Groups[1].Value));
+            pos = m.Index + m.Length;
+        }
+        if (pos < text.Length) yield return (text[pos..], 0);
+    }
+
     // ------------------------------------------------------------------ contents lines
 
     static readonly Regex Leader = new(
@@ -216,6 +252,9 @@ public static class TextTools
         var s = Regex.Replace(sb.ToString(), @"[ \t]+", " ");
         s = Regex.Replace(s, @" ([,.;:!?)\]])", "$1");
         s = Regex.Replace(s, @"([(\[]) ", "$1");
+        // "with[M/E]and" → "with [M/E] and": CJK brackets carry no spaces of their own.
+        s = Regex.Replace(s, @"(?<=[\p{L}\p{N}])\[(?=[^\]]*\])", " [");
+        s = Regex.Replace(s, @"\](?=[\p{L}\p{N}])", "] ");
         return s.Trim();
     }
 }

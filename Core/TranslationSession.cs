@@ -70,6 +70,10 @@ public sealed class TranslationSession : IDisposable
     /// <summary>Background/ink colours, ids, and how much free space each block may grow into.</summary>
     static void FinishRegions(PageResult page, RasterPage raster)
     {
+        // Pixels of inline icons, so the composer can draw them inside the translated sentence.
+        foreach (var r in page.Regions.Where(r => r.Inlines.Count > 0))
+            r.Inlines = r.Inlines.Select(i => i with { Png = PageRenderer.CropPng(raster, i.Bounds.Inflate(0.5)) }).ToList();
+
         int id = 1;
         var verticalRules = page.Rules.Where(x => x.H > x.W).ToList();
         foreach (var r in page.Regions)
@@ -285,7 +289,8 @@ public sealed class TranslationSession : IDisposable
         {
             string translated = _cache[Key(translator, opt, body)];
             string number = TextTools.LocalizeNumbering(prefix, opt.Target);
-            r.Translated = TextTools.NormalizeForTarget((number.Length > 0 ? number + " " : "") + translated, opt.Target) +
+            r.Translated = TextTools.RestoreInlineTokens(
+                               TextTools.NormalizeForTarget((number.Length > 0 ? number + " " : "") + translated, opt.Target), r.Inlines.Count) +
                            (pageRef != null ? "\t" + TextTools.NormalizeForTarget(pageRef, opt.Target) : "");
         }
     }

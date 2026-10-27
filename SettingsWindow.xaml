@@ -18,6 +18,7 @@
                 <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.Resources>
                 <Style TargetType="TextBlock"><Setter Property="VerticalAlignment" Value="Center" /><Setter Property="Margin" Value="0,4" /></Style>
@@ -80,6 +81,15 @@
                     ToolTip="Windows Settings › Language &amp; region: add a language, then its Optical character recognition feature" />
             <TextBlock Grid.Row="14" Grid.Column="1" TextWrapping="Wrap" Foreground="#777" FontSize="11"
                        Text="Optional: Chinese and Japanese are read by the built-in PaddleOCR engine either way." />
+
+            <TextBlock Grid.Row="15" Text="Offline translation" />
+            <TextBlock Grid.Row="15" Grid.Column="1" x:Name="OfflineStatus" TextWrapping="Wrap" Foreground="#555"
+                       ToolTip="LibreTranslate running on this PC: free, private, no internet needed after installing" />
+            <StackPanel Grid.Row="15" Grid.Column="2" Orientation="Horizontal">
+                <Button x:Name="OfflineInstallButton" Content="Install…" Click="OfflineInstall_Click"
+                        ToolTip="Downloads LibreTranslate with its own Python (about 1 GB) in a progress window" />
+                <Button Content="About…" Tag="https://github.com/LibreTranslate/LibreTranslate" Click="Link_Click" />
+            </StackPanel>
         </Grid>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Save" IsDefault="True" Click="Save_Click" Width="90" Margin="0,0,6,0" />

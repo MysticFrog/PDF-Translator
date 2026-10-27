@@ -18,8 +18,7 @@ public sealed class ClaudeTranslator : ITranslator
 
     public ClaudeTranslator(string apiKey, string model)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("Anthropic API key is not set. Open Settings or set ANTHROPIC_API_KEY.");
+        if (string.IsNullOrWhiteSpace(apiKey)) throw new MissingKeyException(KeyHelp.For("claude"));
         _client = new AnthropicClient { ApiKey = apiKey.Trim() };
         _model = model;
     }
@@ -57,7 +56,8 @@ public sealed class ClaudeTranslator : ITranslator
             "The user message is a JSON array of text blocks from one page, in reading order. " +
             "Translate every block faithfully, using the neighbouring blocks as context. Keep numbers, units, part numbers, " +
             "codes, URLs, e-mail addresses and proper names unchanged. Keep translations about as short as the source, " +
-            "because each must fit back into the original layout box. If a block is already in the target language or is " +
+            "because each must fit back into the original layout box. Placeholders like {{1}} stand for icons inside " +
+            "the sentence: keep each exactly once, at the matching place. If a block is already in the target language or is " +
             "not translatable, return it unchanged. Reply with only a JSON array of strings, the same length and order as the input.";
 
         var parameters = new MessageCreateParams

@@ -16,7 +16,9 @@ WPF (.NET 8) app that translates PDFs while keeping the original layout, with a 
    - *Images + scanned pages* (default): every embedded image, plus whole pages that have no text layer.
    - *Whole page*: OCRs everything, keeping only words the text layer doesn't already cover.
    OCR words go through the same rule-aware line/block builder; bold is estimated from ink density.
-3. **Translate** – blocks go to the selected service in one batch per page. List numbers are split off and localised (`二．` → `2.`, `①` → `(1)`),
+3. **Translate** – blocks go to the selected service in one batch per page. Small graphics inside a line of text (key and
+   button icons) keep the sentence whole: they travel as `{{1}}` placeholders and are redrawn at the matching place in the
+   translation. List numbers are split off and localised (`二．` → `2.`, `①` → `(1)`),
    blocks without any letters of the page's script (codes such as `F52983/4`, `25000/25201`) are left as they are, and CJK punctuation is
    converted for Latin-script targets.
 4. **Compose** – PDFsharp copies every original page untouched (vectors, images, fonts), paints each block's box in its sampled background
@@ -42,6 +44,7 @@ WPF (.NET 8) app that translates PDFs while keeping the original layout, with a 
 | Service | Needs |
 |---|---|
 | MyMemory (default) | nothing; optional e-mail raises the daily quota |
+| LibreTranslate offline (on this PC) | nothing after a one-time install (Settings › Offline translation › Install, or `PdfTranslator.exe --install-offline`): [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) with its own Python 3.11 (via uv) in `%LOCALAPPDATA%\PdfTranslator\libretranslate`, ~1 GB. The app starts it on 127.0.0.1:5099 with only the languages in use (each new pair downloads a ~100 MB model once) and stops it on exit. Free, private, offline |
 | Google Translate (free web endpoint) | nothing; unofficial – Google refuses it from some networks/clients |
 | LibreTranslate | server URL (+ key for libretranslate.com) |
 | DeepL API | API key (Free keys end in `:fx`) |
@@ -51,7 +54,8 @@ WPF (.NET 8) app that translates PDFs while keeping the original layout, with a 
 | Claude (Anthropic API key) | API key or `ANTHROPIC_API_KEY`; default model `claude-opus-5-5` with server-side refusal fallback |
 | Extract only | nothing; finds the blocks **without translating** them – fill them in the editor, or ask Claude in Claude Code / Claude Desktop to translate the open PDF through MCP |
 
-Keys are entered under **Settings…** and stored DPAPI-encrypted in `%APPDATA%\PdfTranslator\settings.json`.
+When a service needs a key that isn't set, a dialog explains how to get one, with buttons for the sign-up page, Settings,
+and a free alternative; links in any message are clickable. Keys are entered under **Settings…** and stored DPAPI-encrypted in `%APPDATA%\PdfTranslator\settings.json`.
 
 ## Using it
 

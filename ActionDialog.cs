@@ -58,17 +58,16 @@ public sealed class ActionDialog : Window
         ShowInTaskbar = false;
         try { Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/PdfTranslator.ico")); } catch { }
 
-        var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new TextBox
+        var root = new StackPanel { Margin = new Thickness(18, 14, 18, 14) };
+        root.Children.Add(new TextBlock
         {
-            Text = message,
-            IsReadOnly = true,
+            Text = title,
+            FontSize = 17,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10),
             TextWrapping = TextWrapping.Wrap,
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
-            FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 12),
         });
+        root.Children.Add(LinkedText(message));
 
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         bool first = true;
@@ -92,6 +91,27 @@ public sealed class ActionDialog : Window
         _status = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0), FontSize = 11 };
         root.Children.Add(_status);
         Content = root;
+    }
+
+    static readonly System.Text.RegularExpressions.Regex LinkPattern =
+        new(@"(https?://|ms-settings:)[^\s""“”<>]+");
+
+    /// <summary>The message with every web address (and ms-settings: page) as a clickable link.</summary>
+    static TextBlock LinkedText(string message)
+    {
+        var block = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, LineHeight = 20, Margin = new Thickness(0, 0, 0, 14) };
+        int pos = 0;
+        foreach (System.Text.RegularExpressions.Match m in LinkPattern.Matches(message))
+        {
+            string url = m.Value.TrimEnd('.', ',', ';', ':', ')', '’', '”');
+            if (m.Index > pos) block.Inlines.Add(new System.Windows.Documents.Run(message[pos..m.Index]));
+            var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(url)) { ToolTip = "Open " + url };
+            link.Click += (_, _) => Launch.Url(url);
+            block.Inlines.Add(link);
+            pos = m.Index + url.Length;
+        }
+        if (pos < message.Length) block.Inlines.Add(new System.Windows.Documents.Run(message[pos..]));
+        return block;
     }
 
     /// <summary>Set by the --snapshot-dialog command: dialogs are rendered to this PNG instead of shown.</summary>

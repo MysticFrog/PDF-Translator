@@ -105,6 +105,12 @@ public static class Cli
                         case "mcp":
                             w.McpText_Click(w, null);
                             break;
+                        case "key":
+                            w.ShowMissingKey(KeyHelp.For("deepl"));
+                            break;
+                        case "offline":
+                            w.ShowOfflineInstall();
+                            break;
                         default:
                             SaveWindowImage(new SettingsWindow(AppSettings.Load()), args[2]);
                             break;
@@ -112,6 +118,16 @@ public static class Cli
                     w.Close();
                     Console.WriteLine($"Wrote {args[2]}");
                     return 0;
+                }
+                case "--install-offline":
+                {
+                    // Installs offline LibreTranslate in this console (same script as Settings › Offline translation › Install).
+                    var psi = new System.Diagnostics.ProcessStartInfo("powershell.exe",
+                        $"-NoProfile -ExecutionPolicy Bypass -File \"{LocalLibre.WriteInstallScript()}\"") { UseShellExecute = false };
+                    using var proc = System.Diagnostics.Process.Start(psi)!;
+                    await proc.WaitForExitAsync();
+                    Console.WriteLine(LocalLibre.IsInstalled ? "Offline LibreTranslate installed." : "Install did not complete.");
+                    return LocalLibre.IsInstalled ? 0 : 1;
                 }
                 case "--version":
                     Console.WriteLine(AppInfo.Title);
@@ -141,6 +157,8 @@ public static class Cli
     static async Task<int> TranslateAsync(string input, string output, TranslateOptions opt, string provider)
     {
         var translator = TranslatorFactory.Create(provider, AppSettings.Load());
+        if (translator is LocalLibreTranslator)
+            await LocalLibre.EnsureRunningAsync(opt.Source, opt.Target, new SyncProgress(Console.WriteLine), CancellationToken.None);
         using var session = new TranslationSession(input);
         var log = new SyncProgress(Console.WriteLine);
         for (int i = 0; i < session.PageCount; i++)
@@ -152,6 +170,7 @@ public static class Cli
                 Console.WriteLine($"   #{r.Id} [{r.OriginLabel} {r.StyleLabel}{(r.Align != TextAlign.Left ? " " + r.Align : "")}] {Short(r.Source)}  =>  {Short(r.Translated ?? "")}");
         }
         session.Save(output);
+        LocalLibre.Stop();
         Console.WriteLine($"Wrote {output}");
         return 0;
     }

@@ -48,6 +48,9 @@ public enum RegionSource { TextLayer, ImageOcr, PageOcr, Added }
 
 public enum TextAlign { Left, Center, Right }
 
+/// <summary>A small graphic inside a line of text (a key or button icon), redrawn inline with the translation.</summary>
+public sealed record InlineGraphic(RectD Bounds, byte[] Png);
+
 /// <summary>One physical line of source text inside a block.</summary>
 public sealed record SourceLine(RectD Bounds, string Text);
 
@@ -63,6 +66,8 @@ public sealed class TextRegion
     public string Source { get; set; } = "";
     public string? Translated { get; set; }
     public List<SourceLine> Lines { get; set; } = new();
+    /// <summary>Icons inside the text, referenced from Source/Translated as {{1}}, {{2}}… in order.</summary>
+    public List<InlineGraphic> Inlines { get; set; } = new();
     public double FontSize { get; set; } = 10;
     /// <summary>Fixed output size set by the user; null = fit automatically.</summary>
     public double? FontSizeOverride { get; set; }
