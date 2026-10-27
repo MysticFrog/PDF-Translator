@@ -67,7 +67,8 @@ to translate the PDF that is open in PDF Translator; the buttons don't call Clau
 
 While the app runs it serves an MCP endpoint at `http://localhost:8765/mcp` (loopback only; port and on/off in Settings).
 Claude can then read the open document, look at page images, write translations and fix the layout while you watch the side-by-side view.
-Click the **MCP** indicator in the status bar to copy the setup command.
+Click the **MCP** indicator in the status bar: **Add to Claude Code** runs the `claude mcp add` command in a terminal,
+**Add to Claude Desktop** writes the entry into Claude Desktop's config (restart it afterwards).
 
 ```
 claude mcp add --transport http pdf-translator http://localhost:8765/mcp
@@ -108,8 +109,8 @@ powershell -File build.ps1 [-Run]
 powershell -File build.ps1 -Installer
 ```
 
-`-Installer` publishes the app self-contained (no .NET install needed on the target PC) and builds
-`PdfTranslatorSetup-<version>.exe`, a single-file installer in the BasicConnect style (`tools\Setup`, .NET Framework 4.7.2):
+`-Installer` publishes the app self-contained (no .NET install needed on the target PC) to `dist\PdfTranslator` and builds
+`dist\PdfTranslatorSetup-<version>.exe`, a single-file installer in the BasicConnect style (`tools\Setup`, .NET Framework 4.7.2):
 per-user by default, all-users with elevation on request, folder choice, desktop shortcut, Add/Remove Programs entry, and an
 `Uninstall.exe` copy of itself. Command line: `/S` silent, `/allusers`, `/D="C:\Path"`, `/nodesktop`, `/uninstall`.
 An `EULA.txt` in the project root is shown and must be accepted when present.

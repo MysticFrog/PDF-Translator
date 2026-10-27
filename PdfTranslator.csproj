@@ -16,6 +16,19 @@
     <Company>Andrew Jones</Company>
     <Copyright>Copyright © 2026 Andrew Jones</Copyright>
     <Product>PDF Translator</Product>
+    <!-- dist\ holds the published app and installer; tools\ the installer project. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);dist\**;tools\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!--
+    "Dist" is Release for the self-contained publish (build.ps1 -Installer). It has its own bin\obj
+    folders: sharing them with the framework-dependent Release build left a self-contained launcher
+    in bin\Release that then failed with "You must install .NET".
+  -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Dist' ">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -492,7 +492,7 @@ public partial class MainWindow
             SetStatus($"Translated {regions.Count} block(s).");
         }
         catch (OperationCanceledException) { SetStatus("Cancelled."); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { ShowError(ex); }
         finally
         {
             _cts.Dispose();

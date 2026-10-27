@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -144,10 +144,40 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowError(ex);
             translator = null;
             return false;
         }
+    }
+
+    /// <summary>Errors with a fix the app can start (Claude Code sign-in) get buttons; the rest a message box.</summary>
+    void ShowError(Exception ex)
+    {
+        if (ex is ClaudeCodeSetupException setup) ShowClaudeCodeSetup(setup);
+        else MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    internal void ShowClaudeCodeSetup(ClaudeCodeSetupException ex)
+    {
+        if (ex.Exe == null)
+        {
+            ActionDialog.Show(this, "Claude Code needed",
+                "Translating with your Claude account uses Claude Code, which was not found on this PC.\n\n" +
+                "Install it, or if it is installed somewhere unusual, set its path in Settings.",
+                new ActionDialog.Action("Download Claude Code", () => Launch.Url("https://claude.com/claude-code")),
+                new ActionDialog.Action("Open Settings", () => Dispatcher.InvokeAsync(() => Settings_Click(this, new RoutedEventArgs())), CloseAfter: true));
+            return;
+        }
+        ActionDialog.Show(this, "Sign in Claude Code",
+            ex.Message + "\n\n" +
+            "1.  Click “Get sign-in token”. A terminal window opens and runs Claude Code's setup-token; sign in with your " +
+            "Claude account in the browser page it opens.\n" +
+            "2.  Copy the token it prints in the terminal.\n" +
+            "3.  Click “Open Settings”, paste it into “Claude Code token” and Save. Then translate again.\n\n" +
+            "No API key is needed. Claude Code: " + ex.Exe,
+            new ActionDialog.Action("Get sign-in token", () => Launch.Terminal(ex.Exe, "setup-token"),
+                ToolTip: "Opens a terminal running: claude setup-token"),
+            new ActionDialog.Action("Open Settings", () => Dispatcher.InvokeAsync(() => Settings_Click(this, new RoutedEventArgs())), CloseAfter: true));
     }
 
     async void TranslatePage_Click(object sender, RoutedEventArgs e) => await RunAsync(new[] { _page });
@@ -179,6 +209,7 @@ public partial class MainWindow : Window
         var log = new Progress<string>(SetStatus);
         var errors = new List<string>();
         var notes = new List<string>();
+        ClaudeCodeSetupException? setupProblem = null;
         try
         {
             foreach (var index in pages)
@@ -192,6 +223,13 @@ public partial class MainWindow : Window
                     if (result.Note != null) notes.Add($"Page {index + 1}: {result.Note}");
                 }
                 catch (OperationCanceledException) { throw; }
+                catch (ClaudeCodeSetupException ex)
+                {
+                    // Every page would fail the same way; stop and offer the fix.
+                    setupProblem = ex;
+                    errors.Add(ex.Message);
+                    break;
+                }
                 catch (Exception ex)
                 {
                     errors.Add($"Page {index + 1}: {ex.Message}");
@@ -207,7 +245,8 @@ public partial class MainWindow : Window
             SetStatus(errors.Count == 0
                 ? $"{what}: {pages.Count} page(s)." + (notes.Count > 0 ? $"  ⚠ {notes[0]}" : "")
                 : $"Finished with {errors.Count} error(s). {errors[0]}");
-            if (errors.Count > 0)
+            if (setupProblem != null) ShowClaudeCodeSetup(setupProblem);
+            else if (errors.Count > 0)
                 MessageBox.Show(this, string.Join("\n", errors.Concat(notes).Take(12)), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (OperationCanceledException)

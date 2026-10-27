@@ -39,17 +39,53 @@ public partial class MainWindow
         }
     }
 
-    void McpText_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    internal void McpText_Click(object sender, System.Windows.Input.MouseButtonEventArgs? e)
     {
         if (_mcp == null) { Settings_Click(sender, e); return; }
-        string cmd = $"claude mcp add --transport http pdf-translator {_mcp.Url}";
-        try { Clipboard.SetText(cmd); } catch { }
-        MessageBox.Show(this,
-            $"MCP endpoint: {_mcp.Url}\n\n" +
-            $"Claude Code (copied to the clipboard):\n{cmd}\n\n" +
-            "Claude Desktop – add to claude_desktop_config.json under \"mcpServers\":\n" +
-            $"\"pdf-translator\": {{ \"command\": \"{Environment.ProcessPath?.Replace("\\", "\\\\")}\", \"args\": [\"--mcp-stdio\", \"--port\", \"{_mcp.Port}\"] }}",
-            "Connect Claude", MessageBoxButton.OK, MessageBoxImage.Information);
+        string url = _mcp.Url;
+        string args = $"mcp add --scope user --transport http pdf-translator {url}";
+        string? cli = Translators.ClaudeCodeTranslator.Locate(_settings.ClaudeCodePath);
+        var actions = new List<ActionDialog.Action>();
+        if (cli != null)
+            actions.Add(new("Add to Claude Code", () => Launch.Terminal(cli, args),
+                ToolTip: "Opens a terminal running: claude " + args));
+        actions.Add(new("Add to Claude Desktop", () => AddToClaudeDesktop(),
+            ToolTip: "Adds a pdf-translator entry to claude_desktop_config.json (a backup is kept)"));
+        actions.Add(new("Copy endpoint", () => Launch.Copy(url)));
+        actions.Add(new("Copy Claude Code command", () => Launch.Copy("claude " + args)));
+
+        ActionDialog.Show(this, "Connect Claude",
+            $"PDF Translator is serving MCP at {url} while it runs.\n\n" +
+            "Connect Claude once, then ask it things like “translate the PDF open in PDF Translator into English”: it reads the " +
+            "blocks and page images, writes the translations and fixes the layout while you watch here.\n\n" +
+            "• Claude Code: “Add to Claude Code” registers the server for all your projects.\n" +
+            "• Claude Desktop: “Add to Claude Desktop” adds it to the config; restart Claude Desktop afterwards.",
+            actions.ToArray());
+    }
+
+    /// <summary>Registers the stdio bridge in Claude Desktop's config (claude_desktop_config.json), keeping a backup.</summary>
+    void AddToClaudeDesktop()
+    {
+        try
+        {
+            string path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude", "claude_desktop_config.json");
+            var root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? new JsonObject() : new JsonObject();
+            if (File.Exists(path)) File.Copy(path, path + ".bak", true);
+            var servers = root["mcpServers"] as JsonObject;
+            if (servers == null) root["mcpServers"] = servers = new JsonObject();
+            servers["pdf-translator"] = new JsonObject
+            {
+                ["command"] = Environment.ProcessPath,
+                ["args"] = new JsonArray("--mcp-stdio", "--port", _settings.McpPort.ToString()),
+            };
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            SetStatus("Added to Claude Desktop. Restart Claude Desktop to load it.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not update Claude Desktop's config:\n" + ex.Message, Title);
+        }
     }
 
     // ---------------------------------------------------------------- tool table

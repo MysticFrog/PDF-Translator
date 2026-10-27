@@ -88,6 +88,30 @@ public static class Cli
                     foreach (var line in ImageRemover.Describe(doc.Pages[int.Parse(args[2]) - 1])) Console.WriteLine(line);
                     return 0;
                 }
+                case "--snapshot-dialog" when args.Length >= 3:
+                {
+                    // --snapshot-dialog signin|mcp|settings out.png
+                    var w = new MainWindow { Left = -20000, Top = 0, ShowActivated = false };
+                    w.Show();
+                    await w.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    ActionDialog.SnapshotTarget = args[2];
+                    switch (args[1])
+                    {
+                        case "signin":
+                            w.ShowClaudeCodeSetup(new Translators.ClaudeCodeSetupException("Claude Code is not signed in for PDF Translator.",
+                                Translators.ClaudeCodeTranslator.Locate(null) ?? "claude.exe", false));
+                            break;
+                        case "mcp":
+                            w.McpText_Click(w, null);
+                            break;
+                        default:
+                            SaveWindowImage(new SettingsWindow(AppSettings.Load()), args[2]);
+                            break;
+                    }
+                    w.Close();
+                    Console.WriteLine($"Wrote {args[2]}");
+                    return 0;
+                }
                 case "--providers":
                     foreach (var p in TranslatorFactory.Providers) Console.WriteLine($"{p.Id,-14} {p.Name} — {p.Requirement}");
                     return 0;
@@ -174,6 +198,31 @@ public static class Cli
         w.Close();
         Console.WriteLine($"Wrote {png}");
         return 0;
+    }
+
+    /// <summary>Shows a window off-screen, renders it to a PNG and closes it.</summary>
+    internal static void SaveWindowImage(Window window, string png)
+    {
+        window.Left = -20000;
+        window.Top = 0;
+        window.ShowActivated = false;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Show();
+        window.UpdateLayout();
+        window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        var content = (FrameworkElement)window.Content;
+        var rtb = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        var bg = new DrawingVisual();
+        using (var dc = bg.RenderOpen())
+        {
+            dc.DrawRectangle(SystemColors.WindowBrush, null, new Rect(0, 0, content.ActualWidth, content.ActualHeight));
+            dc.DrawRectangle(new VisualBrush(content), null, new Rect(0, 0, content.ActualWidth, content.ActualHeight));
+        }
+        rtb.Render(bg);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using (var fs = File.Create(png)) enc.Save(fs);
+        window.Close();
     }
 
     sealed class SyncProgress(Action<string> act) : IProgress<string>

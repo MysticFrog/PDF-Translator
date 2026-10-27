@@ -8,7 +8,9 @@
     .\build.ps1 -Installer      also publish self-contained and make PdfTranslatorSetup-<version>.exe
 
 .NOTES
-    Everything is written under %USERPROFILE%\source\build\PdfTranslator (kept off Google Drive).
+    Deliverables go to dist\ in the project folder: dist\PdfTranslator (the self-contained app) and
+    dist\PdfTranslatorSetup-<version>.exe. Compiler output and installer staging stay under
+    %USERPROFILE%\source\build\PdfTranslator, off Google Drive (sync locks files mid-build).
     The installer is the BasicConnect-style single executable in tools\Setup: per-user by default,
     /allusers, /S, /D=, /nodesktop, /uninstall.
 #>
@@ -22,6 +24,7 @@ $env:DOTNET_NOLOGO = "1"
 
 $root = $PSScriptRoot
 $buildDir = Join-Path $env:USERPROFILE "source\build\PdfTranslator"
+$distDir = Join-Path $root "dist"
 $project = Join-Path $root "PdfTranslator.csproj"
 
 & $dotnet build $project -c $Configuration
@@ -41,9 +44,10 @@ if ($Installer) {
     $fileVersion = "$version.$commits"
 
     # 1. The application, self-contained so nothing has to be installed first.
-    $publish = Join-Path $buildDir 'publish'
+    $publish = Join-Path $distDir 'PdfTranslator'
     if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
-    & $dotnet publish $project -c Release -r win-x64 --self-contained true -o $publish -p:DebugType=none
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+    & $dotnet publish $project -c Dist -r win-x64 --self-contained true -o $publish
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     # 2. Payload: the published folder as one archive, plus the icon (and an EULA.txt when there is one).
@@ -70,7 +74,8 @@ if ($Installer) {
     & $dotnet build (Join-Path $root 'tools\Setup\Setup.csproj') -c Release "-p:PayloadDir=$payload\"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $setupExe = Join-Path $buildDir 'setup\bin\Release\net472\PdfTranslatorSetup.exe'
-    $final = Join-Path $buildDir "PdfTranslatorSetup-$fileVersion.exe"
+    Get-ChildItem $distDir -Filter 'PdfTranslatorSetup-*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force
+    $final = Join-Path $distDir "PdfTranslatorSetup-$fileVersion.exe"
     Copy-Item $setupExe $final -Force
     Write-Host ("Installer: {0} ({1:N0} MB)" -f $final, ((Get-Item $final).Length / 1MB))
 }

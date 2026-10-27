@@ -6,6 +6,14 @@ using PdfTranslator.Core;
 
 namespace PdfTranslator.Translators;
 
+/// <summary>Claude Code is missing or not signed in; the UI offers buttons to fix it.</summary>
+public sealed class ClaudeCodeSetupException(string message, string? exe, bool tokenRejected) : InvalidOperationException(message)
+{
+    /// <summary>The CLI that was found, or null when Claude Code is not installed.</summary>
+    public string? Exe { get; } = exe;
+    public bool TokenRejected { get; } = tokenRejected;
+}
+
 /// <summary>
 /// Translation through the Claude Code CLI in headless mode (<c>claude -p</c>), using the user's own Claude sign-in
 /// instead of an API key. Each page's blocks go in as a JSON array on stdin; the reply is a JSON array of the same
@@ -20,8 +28,8 @@ public sealed class ClaudeCodeTranslator : ITranslator
     public ClaudeCodeTranslator(string? configuredPath, string model, string token = "")
     {
         _token = token.Trim();
-        _exe = Locate(configuredPath) ?? throw new InvalidOperationException(
-            "Claude Code was not found. Install it (https://claude.com/claude-code) or set its path in Settings.");
+        _exe = Locate(configuredPath) ?? throw new ClaudeCodeSetupException(
+            "Claude Code was not found. Install it, or set its path in Settings.", null, false);
         _model = model.Trim();
     }
 
@@ -143,11 +151,9 @@ public sealed class ClaudeCodeTranslator : ITranslator
         {
             string message = result.Length > 0 ? result : stderr.Trim();
             if (message.Contains("login", StringComparison.OrdinalIgnoreCase) || message.Contains("logged in", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(_token.Length > 0
-                    ? "Claude Code rejected the saved token. Create a new one with \"claude setup-token\" and paste it in Settings › Claude Code token."
-                    : "Claude Code is not signed in. In a normal Windows Terminal or Command Prompt (not inside Claude), run:\n\n  \"" + _exe +
-                      "\" setup-token\n\nsign in with your Claude account, then paste the token it prints into Settings › Claude Code token. " +
-                      "(No API key needed.)");
+                throw new ClaudeCodeSetupException(_token.Length > 0
+                    ? "Claude Code rejected the saved token. Create a new one and paste it in Settings › Claude Code token."
+                    : "Claude Code is not signed in for PDF Translator.", _exe, _token.Length > 0);
             throw new InvalidOperationException("Claude Code failed: " + (message.Length > 400 ? message[..400] + "…" : message));
         }
 

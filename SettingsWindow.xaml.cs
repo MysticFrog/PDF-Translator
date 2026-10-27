@@ -38,6 +38,29 @@ public partial class SettingsWindow : Window
         }
     }
 
+    void Link_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string url }) Launch.Url(url);
+    }
+
+    void LibreSite_Click(object sender, RoutedEventArgs e)
+    {
+        var url = LibreUrl.Text.Trim();
+        if (Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https")) Launch.Url(url);
+    }
+
+    void GetToken_Click(object sender, RoutedEventArgs e)
+    {
+        var exe = PdfTranslator.Translators.ClaudeCodeTranslator.Locate(ClaudeCodePath.Text);
+        if (exe == null)
+        {
+            MessageBox.Show(this, "Claude Code was not found. Use “Download…” to install it, or enter its path.", Title);
+            return;
+        }
+        Launch.Terminal(exe, "setup-token");
+        ClaudeCodeToken.Focus();
+    }
+
     void Save_Click(object sender, RoutedEventArgs e)
     {
         _s.DeepLKey = DeepLKey.Password.Trim();
