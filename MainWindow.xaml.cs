@@ -240,6 +240,8 @@ public partial class MainWindow : Window
         if (opt.Source == opt.Target) { MessageBox.Show(this, "Source and target language are the same.", Title); return; }
         if (translator is LocalLibreTranslator)
         {
+            // A restart mid-run (a newly detected language) reports here too.
+            LocalLibre.Reporter ??= new Progress<string>(SetStatus);
             // Start (and on first use, download models for) the local server here, so progress shows in the status bar.
             _cts = new CancellationTokenSource();
             SetBusy(true);
