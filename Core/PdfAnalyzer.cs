@@ -75,7 +75,8 @@ public sealed class PdfAnalyzer : IDisposable
         foreach (var img in page.GetImages())
         {
             var r = ToTopLeft(img.BoundingBox);
-            if (r.W > 20 && r.H > 10) images.Add(r);
+            // Small images matter too: captions and labels are often pasted in as 8-10 pt tall pictures.
+            if (r.W > 12 && r.H > 4) images.Add(r);
         }
         return new PageLayout(result, images, glyphs.Count);
     }

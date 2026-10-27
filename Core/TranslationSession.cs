@@ -109,14 +109,11 @@ public sealed class TranslationSession : IDisposable
         OcrMode mode, string source, IProgress<string>? log, CancellationToken ct)
     {
         bool scanned = layout.LetterCount < 10;
-        var areas = new List<(RectD area, RegionSource origin)>();
-        if (mode == OcrMode.FullPage || scanned)
-            areas.Add((new RectD(0, 0, page.Width, page.Height), RegionSource.PageOcr));
-        else
-            areas.AddRange(layout.Images.Select(i => (i, RegionSource.ImageOcr)));
-        if (areas.Count == 0) return;
+        // Plain text pages (no pictures, no line graphics) have nothing for OCR to find.
+        bool graphics = layout.Images.Count > 0 || page.Rules.Count > 0;
+        if (mode == OcrMode.Auto && !scanned && !graphics) return;
 
-        // Windows OCR if it has a language for the document's script, else Tesseract (data fetched on first use).
+        // Windows OCR if it has a language for the document's script, else PaddleOCR / Tesseract (data fetched on first use).
         var script = source != Languages.Auto ? TextTools.ScriptOfLanguage(source) : TextTools.Dominant(page.Regions.Select(r => r.Source));
         var (ocr, problem) = await OcrFactory.CreateAsync(source, script, log, ct);
         if (ocr == null)
@@ -124,6 +121,16 @@ public sealed class TranslationSession : IDisposable
             page.Note = $"Image text skipped: {problem}.";
             return;
         }
+
+        // Read the whole page: labels in diagrams are often drawn as outlines (vector), not text or pictures.
+        // Words the text layer already has are dropped below. Tesseract is too noisy on line drawings, so with it
+        // the default mode reads only the embedded images.
+        var areas = new List<(RectD area, RegionSource origin)>();
+        if (mode == OcrMode.FullPage || scanned || ocr is not TesseractOcr)
+            areas.Add((new RectD(0, 0, page.Width, page.Height), RegionSource.PageOcr));
+        else
+            areas.AddRange(layout.Images.Select(i => (i, RegionSource.ImageOcr)));
+        if (areas.Count == 0) return;
         if (ocr.PreferredDpi > OcrDpi)
             raster = await Task.Run(() => PageRenderer.Render(Bytes, page.Index, ocr.PreferredDpi, page.Width), ct);
 
@@ -151,7 +158,13 @@ public sealed class TranslationSession : IDisposable
 
             var segs = LayoutBuilder.LinesFromWords(styled, rules);
             foreach (var region in LayoutBuilder.BuildBlocks(segs, rules, origin, page.Width))
-                if (LooksLikeText(region.Source)) page.Regions.Add(region);
+            {
+                if (!LooksLikeText(region.Source)) continue;
+                // Text read from inside a picture is image text (it goes when the picture is deleted).
+                var c = (x: region.Bounds.X + region.Bounds.W / 2, y: region.Bounds.Y + region.Bounds.H / 2);
+                if (layout.Images.Any(i => i.Inflate(1).Contains(c.x, c.y))) region.Origin = RegionSource.ImageOcr;
+                page.Regions.Add(region);
+            }
         }
     }
 
@@ -250,13 +263,15 @@ public sealed class TranslationSession : IDisposable
             ? TextTools.Dominant(page.Regions.Select(r => r.Source))
             : TextTools.ScriptOfLanguage(opt.Source);
 
-        var work = new List<(TextRegion region, string prefix, string body)>();
+        var work = new List<(TextRegion region, string prefix, string body, string? pageRef)>();
         foreach (var r in regions)
         {
             if (!TextTools.ShouldTranslate(r.Source, script)) { r.Translated = r.Source; continue; }
-            var (prefix, body) = TextTools.SplitNumbering(r.Source);
+            // Contents line: translate the title only; the dot leaders are redrawn and the page ref kept.
+            var (text, pageRef) = r.LineCount == 1 ? TextTools.SplitLeader(r.Source) : (r.Source, null);
+            var (prefix, body) = TextTools.SplitNumbering(text);
             if (!TextTools.ShouldTranslate(body, script)) { r.Translated = r.Source; continue; }
-            work.Add((r, prefix, body));
+            work.Add((r, prefix, body, pageRef));
         }
 
         var pending = work.Select(w => w.body).Where(b => !_cache.ContainsKey(Key(translator, opt, b))).Distinct().ToList();
@@ -266,11 +281,12 @@ public sealed class TranslationSession : IDisposable
             var output = await translator.TranslateAsync(pending, opt.Source, opt.Target, ct);
             for (int i = 0; i < pending.Count; i++) _cache[Key(translator, opt, pending[i])] = output[i];
         }
-        foreach (var (r, prefix, body) in work)
+        foreach (var (r, prefix, body, pageRef) in work)
         {
             string translated = _cache[Key(translator, opt, body)];
             string number = TextTools.LocalizeNumbering(prefix, opt.Target);
-            r.Translated = TextTools.NormalizeForTarget((number.Length > 0 ? number + " " : "") + translated, opt.Target);
+            r.Translated = TextTools.NormalizeForTarget((number.Length > 0 ? number + " " : "") + translated, opt.Target) +
+                           (pageRef != null ? "\t" + TextTools.NormalizeForTarget(pageRef, opt.Target) : "");
         }
     }
 

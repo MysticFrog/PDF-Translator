@@ -169,6 +169,21 @@ public static class TextTools
         return 0;
     }
 
+    // ------------------------------------------------------------------ contents lines
+
+    static readonly Regex Leader = new(
+        @"^(?<body>.*?\S)\s*(?:[\.。·…・‧∙⋯]{4,}|(?:\.\s){4,})\s*(?<ref>[0-9０-９A-Za-z][0-9０-９A-Za-z\-－‐–—\.．]{0,12})\s*$");
+
+    /// <summary>True for a contents line: a title, dot leaders, then a page reference ("铭牌说明……1-1").</summary>
+    public static bool HasLeader(string text) => Leader.IsMatch(text);
+
+    /// <summary>Splits a contents line into its title and page reference; ref is null when it isn't one.</summary>
+    public static (string body, string? pageRef) SplitLeader(string text)
+    {
+        var m = Leader.Match(text);
+        return m.Success ? (m.Groups["body"].Value.Trim(), m.Groups["ref"].Value.Trim()) : (text, null);
+    }
+
     // ------------------------------------------------------------------ punctuation
 
     /// <summary>

@@ -89,7 +89,11 @@ public static class PdfComposer
 
     static void DrawPage(XGraphics gfx, PageResult page, string target)
     {
-        var plans = page.Regions.Where(r => r.HasOverlay).Select(r => MakePlan(r, target)).ToList();
+        // Contents lines ("Title ........ 1-2"): the translation carries the page ref after a tab.
+        var contents = page.Regions.Where(r => r.HasOverlay && r.Translated!.Contains('\t')).ToList();
+        DrawContentsLines(gfx, contents, target);
+
+        var plans = page.Regions.Where(r => r.HasOverlay && !contents.Contains(r)).Select(r => MakePlan(r, target)).ToList();
 
         // Pass 1: the largest size at which each block fits on its own.
         foreach (var p in plans)
@@ -256,6 +260,66 @@ public static class PdfComposer
             }
             y += size * p.Pitch;
         }
+    }
+
+    /// <summary>
+    /// Draws contents lines: title on the left, page reference right-aligned at the line's end, dot leaders between.
+    /// All lines of the same source size share one output size so the contents stay even.
+    /// </summary>
+    static void DrawContentsLines(XGraphics gfx, List<TextRegion> lines, string target)
+    {
+        foreach (var group in lines.GroupBy(r => Math.Round(r.FontSize * 2) / 2))
+        {
+            double size = group.Min(r => r.FontSizeOverride ?? FitContentsLine(gfx, r, target));
+            foreach (var r in group) DrawContentsLine(gfx, r, target, r.FontSizeOverride ?? size);
+        }
+    }
+
+    static double FitContentsLine(XGraphics gfx, TextRegion r, string target)
+    {
+        var (title, pageRef) = SplitTab(r.Translated!);
+        string family = FamilyFor(r, target, title);
+        var box = r.DrawBounds;
+        double size = r.FontSize, min = Math.Max(4, r.FontSize * 0.6);
+        while (size > min)
+        {
+            var font = MakeFont(family, size, Style(r, r.Bold));
+            double need = gfx.MeasureString(title, font).Width + gfx.MeasureString(" .... " + pageRef, font).Width;
+            if (need <= box.W) break;
+            size *= 0.95;
+        }
+        return Math.Max(min, size);
+    }
+
+    static void DrawContentsLine(XGraphics gfx, TextRegion r, string target, double size)
+    {
+        var (title, pageRef) = SplitTab(r.Translated!);
+        var box = r.DrawBounds;
+        double pad = Math.Clamp(r.FontSize * 0.08, 0.6, 1.5);
+        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(r.Background.R, r.Background.G, r.Background.B)),
+            r.Bounds.X - pad, r.Bounds.Y - pad, r.Bounds.W + 2 * pad, r.Bounds.H + 2 * pad);
+
+        string family = FamilyFor(r, target, title);
+        var font = MakeFont(family, size, Style(r, r.Bold));
+        var plain = MakeFont(family, size, Style(r, false));
+        var brush = new XSolidBrush(XColor.FromArgb(r.TextColor.R, r.TextColor.G, r.TextColor.B));
+        double y = box.Y + box.H / 2 + size * 0.32;
+        double titleW = gfx.MeasureString(title, font).Width;
+        double refW = gfx.MeasureString(pageRef, font).Width;
+        gfx.DrawString(title, font, brush, box.X, y, XStringFormats.BaseLineLeft);
+        gfx.DrawString(pageRef, font, brush, box.Right - refW, y, XStringFormats.BaseLineLeft);
+
+        // Dot leaders filling the gap, with a little air at both ends.
+        double from = box.X + titleW + size * 0.4, to = box.Right - refW - size * 0.4;
+        double dotW = gfx.MeasureString(".", plain).Width;
+        int count = dotW > 0 ? (int)((to - from) / dotW) : 0;
+        if (count > 2) gfx.DrawString(new string('.', count), plain, brush, to - count * dotW, y, XStringFormats.BaseLineLeft);
+    }
+
+    static (string title, string pageRef) SplitTab(string s)
+    {
+        int i = s.LastIndexOf('\t');
+        return (s[..i].Trim(), s[(i + 1)..].Trim());
     }
 
     /// <summary>Bold label + regular body when the source block started with a bold "Label:".</summary>

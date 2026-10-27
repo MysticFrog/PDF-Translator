@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace PdfTranslator.Core;
 
@@ -252,6 +252,7 @@ public static class LayoutBuilder
         if (line.Bold != last.Bold || line.Italic != last.Italic) return false;
         if (line.BoldLead) return false;                                               // "Label: ..." starts an item
         if (TextTools.StartsWithListMarker(line.Text)) return false;
+        if (TextTools.HasLeader(last.Text) || TextTools.HasLeader(line.Text)) return false;   // contents lines
         if (rules.HorizontalBetween(last.Bounds, line.Bounds)) return false;
 
         // Left edges line up (the first line may be indented, or hang left of the rest).
