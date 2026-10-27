@@ -36,10 +36,12 @@ Write-Host "Built: $exe"
 if ($Installer) {
     # Version: from the csproj, plus the commit count when the sources are in git.
     $version = ([xml](Get-Content $project)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+    # Same stamp as GitVersion.targets gives the application: version.commits+hash[.dirty].
     $commits = 0; $hash = 'local'
     try {
         $commits = [int](git -C $root rev-list --count HEAD 2>$null)
         $hash = (git -C $root rev-parse --short HEAD 2>$null)
+        if (git -C $root status --porcelain --untracked-files=no 2>$null) { $hash += '.dirty' }
     } catch { }
     $fileVersion = "$version.$commits"
 

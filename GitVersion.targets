@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    Stamps every build with the commit it was built from, whatever starts the build (build.ps1, dotnet, an IDE):
+      FileVersion           = <Version>.<commit count>                 e.g. 1.2.0.5
+      InformationalVersion  = <Version>.<commit count>+<short hash>    e.g. 1.2.0.5+9a1ce70
+    ".dirty" is appended when tracked files have uncommitted changes, so a build that does not match any
+    commit can't pass for one. Outside a git checkout the count is 0 and the hash "local".
+  -->
+  <PropertyGroup>
+    <!-- The SDK would otherwise append the full hash itself. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="StampGitVersion" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-list --count HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitCount" />
+    </Exec>
+    <Exec Command="git rev-parse --short HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitShortHash" />
+    </Exec>
+    <Exec Command="git status --porcelain --untracked-files=no" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitStatus" />
+    </Exec>
+    <PropertyGroup>
+      <GitCommitCount Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(GitCommitCount)', '^\d+$'))">0</GitCommitCount>
+      <GitShortHash Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(GitShortHash)', '^[0-9a-f]{4,}$'))">local</GitShortHash>
+      <GitDirtySuffix Condition="'$(GitStatus)' != '' and '$(GitShortHash)' != 'local'">.dirty</GitDirtySuffix>
+      <FileVersion>$(Version).$(GitCommitCount)</FileVersion>
+      <InformationalVersion>$(Version).$(GitCommitCount)+$(GitShortHash)$(GitDirtySuffix)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

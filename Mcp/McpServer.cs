@@ -153,7 +153,7 @@ public sealed class McpServer : IDisposable
                 {
                     ["protocolVersion"] = SupportedVersions.Contains(requested) ? requested : SupportedVersions[0],
                     ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
-                    ["serverInfo"] = new JsonObject { ["name"] = "pdf-translator", ["version"] = "1.1.0" },
+                    ["serverInfo"] = new JsonObject { ["name"] = "pdf-translator", ["version"] = AppInfo.Version },
                     ["instructions"] = _instructions,
                 });
             case "ping":

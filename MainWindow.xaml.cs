@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = AppInfo.Title;
 
         SourceBox.ItemsSource = Languages.All;
         TargetBox.ItemsSource = Languages.Targets.ToList();
@@ -84,7 +85,7 @@ public partial class MainWindow : Window
         _translatedCache.Clear();
         _undo.Clear();
         _redo.Clear();
-        Title = $"PDF Translator — {System.IO.Path.GetFileName(path)}";
+        Title = $"{AppInfo.Title} — {System.IO.Path.GetFileName(path)}";
         PageCountText.Text = $"/ {_session.PageCount}";
         Progress.Value = 0;
         SetBusy(false);

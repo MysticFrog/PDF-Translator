@@ -21,6 +21,7 @@ public static class Cli
                                                            translate one page in the GUI and save a window image
         PdfTranslator.exe --make-sample out.pdf             write a test PDF (text, colours, image text, scanned page)
         PdfTranslator.exe --providers                       list translation services
+        PdfTranslator.exe --version                         version and the commit it was built from
         PdfTranslator.exe --mcp-stdio [--port 8765]         MCP over stdio for Claude Desktop (starts the app if needed)
         """;
 
@@ -112,6 +113,9 @@ public static class Cli
                     Console.WriteLine($"Wrote {args[2]}");
                     return 0;
                 }
+                case "--version":
+                    Console.WriteLine(AppInfo.Title);
+                    return 0;
                 case "--providers":
                     foreach (var p in TranslatorFactory.Providers) Console.WriteLine($"{p.Id,-14} {p.Name} — {p.Requirement}");
                     return 0;
