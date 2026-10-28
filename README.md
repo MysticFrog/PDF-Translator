@@ -65,6 +65,8 @@ and a free alternative; links in any message are clickable. Keys are entered und
 Open (or drop) a PDF → pick languages, service and OCR mode → **Translate page** / **Translate all** → review side by side.
 The block list under the preview shows every block; edit a translation to re-render the page, or select blocks and **Re-translate selected**. **Save translated PDF…** writes `<name>.<lang>.pdf`.
 
+**Several files:** choose more than one in **Open PDF…**, drop several PDFs (or a folder) on the window, or use **Queue › Add files…**. **Start queue** translates them one after another with the current From / To / Service / OCR and saves each as `<name>.<lang>.pdf` next to its original, or in the folder chosen with **Save to a folder…**; an existing file is never overwritten (`<name>.<lang> (2).pdf`). A file that fails is marked and the queue moves on; a missing key, sign-in or model stops it with the fix. Double-click a saved file to open it.
+
 ## Claude via MCP (no API key needed)
 
 MCP works the other way round from the Translate buttons: Claude drives the app. Ask Claude (in Claude Code or Claude Desktop)
@@ -128,7 +130,7 @@ The icon is `Assets\PdfTranslator.ico`, generated from `PDF_TRANSLATE.png` by `t
 ## Limitations
 
 - The original text stays in the PDF underneath the cover boxes, so copy/search finds both languages.
-- Rotated pages (`/Rotate`) and vertical text are copied unchanged.
+- Vertical text is left untranslated (rotated pages are translated as displayed).
 - No bidi/shaping for Arabic, Hebrew or Indic scripts (PDFsharp limitation).
 - Bold/italic inside a sentence (other than a leading `Label:`) is not carried over; the block takes its dominant style.
 - Text cut off at an image edge (e.g. "X9：编码") may not be detected; add it with Shift+drag or `add_block`.

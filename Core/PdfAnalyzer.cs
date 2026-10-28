@@ -17,15 +17,11 @@ public sealed class PdfAnalyzer : IDisposable
     public sealed record PageLayout(PageResult Page, List<RectD> Images, int LetterCount);
 
     /// <summary>
-    /// PdfPig already turns a rotated page's content upright (letters, images and Width/Height are as
-    /// displayed, origin at the bottom left), so only an unrotated page needs its crop-box offset removed.
+    /// PdfPig already places content on the page as displayed: turned upright on a rotated page, and measured
+    /// from the visible box's bottom-left corner (a page box starting at [-12 12] is not offset again), with
+    /// Width/Height as displayed. Only the flip to a top-left origin is left.
     /// </summary>
-    static PageFrame FrameOf(Page page)
-    {
-        if (page.Rotation.Value % 360 != 0) return new PageFrame(0, 0, page.Width, page.Height, 0);
-        var crop = page.CropBox.Bounds;
-        return new PageFrame(crop.Left, crop.Bottom, crop.Right, crop.Top, 0);
-    }
+    static PageFrame FrameOf(Page page) => new(0, 0, page.Width, page.Height, 0);
 
     static RectD ToDisplay(PageFrame frame, PdfRectangle r) => frame.ToDisplay(r.Left, r.Bottom, r.Right, r.Top);
 

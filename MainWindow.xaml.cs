@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -48,28 +48,43 @@ public partial class MainWindow : Window
         OcrBox.SelectedValue = _settings.Ocr;
         OutlinesBox.IsChecked = _settings.ShowBlockOutlines;
 
+        InitQueue();
         Loaded += (_, _) => StartMcp();
         Closing += (_, _) => { SaveChoices(); _cts?.Cancel(); _mcp?.Dispose(); LocalLibre.Stop(); LocalOllama.Stop(); };
     }
 
     // ---------------------------------------------------------------- file
 
+    /// <summary>One file opens for editing; choosing several puts them in the queue.</summary>
     void Open_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog { Filter = "PDF files (*.pdf)|*.pdf", Title = "Open PDF" };
-        if (dlg.ShowDialog(this) == true) OpenFile(dlg.FileName);
+        var dlg = new OpenFileDialog { Filter = "PDF files (*.pdf)|*.pdf", Title = "Open PDF (choose several to queue them)", Multiselect = true };
+        if (dlg.ShowDialog(this) != true) return;
+        if (dlg.FileNames.Length == 1) OpenFile(dlg.FileName);
+        else AddToQueue(dlg.FileNames);
     }
 
+    /// <summary>One PDF opens; several (or a folder of them) go into the queue.</summary>
     void Window_Drop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetData(DataFormats.FileDrop) is string[] files &&
-            files.FirstOrDefault(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) is { } pdf)
-            OpenFile(pdf);
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped) return;
+        var pdfs = dropped.SelectMany(p => Directory.Exists(p)
+                ? Directory.EnumerateFiles(p, "*.pdf", SearchOption.TopDirectoryOnly)
+                : new[] { p })
+            .Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (pdfs.Count == 1 && !Directory.Exists(dropped[0]) && !_queueRunning && _queue.Count == 0) OpenFile(pdfs[0]);
+        else if (pdfs.Count > 0) AddToQueue(pdfs);
     }
 
     public bool OpenFile(string path)
     {
-        if (_cts != null) { SetStatus("Cancel the running translation first."); return false; }
+        if (_cts != null || _queueRunning) { SetStatus("Cancel the running translation first."); return false; }
+        return LoadFile(path);
+    }
+
+    /// <summary>Makes <paramref name="path"/> the open document (the queue also uses this while it runs).</summary>
+    bool LoadFile(string path, bool quiet = false)
+    {
         try
         {
             var session = new TranslationSession(path);
@@ -78,6 +93,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (quiet) throw;
             MessageBox.Show(this, $"Could not open the PDF:\n{ex.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
@@ -88,7 +104,7 @@ public partial class MainWindow : Window
         Title = $"{AppInfo.Title} — {System.IO.Path.GetFileName(path)}";
         PageCountText.Text = $"/ {_session.PageCount}";
         Progress.Value = 0;
-        SetBusy(false);
+        SetBusy(_cts != null);
         SetStatus($"Opened {System.IO.Path.GetFileName(path)}: {_session.PageCount} page(s).");
         ShowPage(0);
         Dispatcher.InvokeAsync(FitWidth, System.Windows.Threading.DispatcherPriority.Loaded);
@@ -283,82 +299,25 @@ public partial class MainWindow : Window
         if (!TryCreateTranslator(out var translator)) return;
         var opt = CurrentOptions();
         if (opt.Source == opt.Target) { MessageBox.Show(this, "Source and target language are the same.", Title); return; }
-        if (translator is LocalLibreTranslator)
-        {
-            // A restart mid-run (a newly detected language) reports here too.
-            LocalLibre.Reporter ??= new Progress<string>(SetStatus);
-            // Start (and on first use, download models for) the local server here, so progress shows in the status bar.
-            _cts = new CancellationTokenSource();
-            SetBusy(true);
-            try { await LocalLibre.EnsureRunningAsync(opt.Source, opt.Target, new Progress<string>(SetStatus), _cts.Token); }
-            catch (OperationCanceledException) { SetStatus("Cancelled."); return; }
-            catch (Exception ex) { ShowProblem("Offline LibreTranslate could not start", ex.Message); return; }
-            finally { _cts.Dispose(); _cts = null; SetBusy(false); }
-        }
-        if (translator is OllamaTranslator)
-        {
-            LocalOllama.Reporter ??= new Progress<string>(SetStatus);
-            _cts = new CancellationTokenSource();
-            SetBusy(true);
-            try { await LocalOllama.EnsureRunningAsync(new Progress<string>(SetStatus), _cts.Token); }
-            catch (OperationCanceledException) { SetStatus("Cancelled."); return; }
-            catch (Exception ex) { ShowError(ex); return; }
-            finally { _cts.Dispose(); _cts = null; SetBusy(false); }
-        }
+        if (!await StartLocalServiceAsync(translator, opt)) return;
         if (translator == null)
             SetStatus("“Extract only” finds blocks without translating. To translate with Claude, pick “Claude (Claude Code sign-in)”, " +
                       "or ask Claude in Claude Code to translate the open PDF (MCP).");
         SaveChoices();
 
-        _translatedCache.Clear();
         _cts = new CancellationTokenSource();
         SetBusy(true);
-        Progress.Maximum = pages.Count;
-        Progress.Value = 0;
-        var log = new Progress<string>(SetStatus);
-        var errors = new List<string>();
-        var notes = new List<string>();
-        Exception? setupProblem = null;
         try
         {
-            foreach (var index in pages)
-            {
-                _cts.Token.ThrowIfCancellationRequested();
-                try
-                {
-                    var result = await _session.TranslatePageAsync(index, opt, translator, log, _cts.Token);
-                    _translatedCache.Remove(index);
-                    if (index == _page) ShowPage(_page);
-                    if (result.Note != null) notes.Add($"Page {index + 1}: {result.Note}");
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) when (ex is ClaudeCodeSetupException or MissingKeyException or LocalLibreMissingException
-                                           or OllamaMissingException or OllamaModelMissingException)
-                {
-                    // Every page would fail the same way; stop and offer the fix.
-                    setupProblem = ex;
-                    errors.Add(ex.Message);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Page {index + 1}: {ex.Message}");
-                    if (errors.Count >= 3)
-                    {
-                        errors.Add("Stopped after repeated errors.");
-                        break;
-                    }
-                }
-                Progress.Value++;
-            }
+            var run = await TranslatePagesAsync(pages, opt, translator, _cts.Token);
             string what = translator == null ? "Blocks extracted (no translation service)" : $"Translated to {Languages.NameOf(opt.Target)} with {translator.DisplayName}";
-            SetStatus(errors.Count == 0
-                ? $"{what}: {pages.Count} page(s)." + (notes.Count > 0 ? $"  ⚠ {notes[0]}" : "")
-                : $"Finished with {errors.Count} error(s). {errors[0]}");
-            if (setupProblem != null) ShowError(setupProblem);
-            else if (errors.Count > 0)
-                ShowProblem(errors.Count == 1 ? "Translation stopped" : $"{errors.Count} problems while translating",
-                    string.Join("\n", errors.Concat(notes).Take(12)));
+            SetStatus(run.Errors.Count == 0
+                ? $"{what}: {pages.Count} page(s)." + (run.Notes.Count > 0 ? $"  ⚠ {run.Notes[0]}" : "")
+                : $"Finished with {run.Errors.Count} error(s). {run.Errors[0]}");
+            if (run.SetupProblem != null) ShowError(run.SetupProblem);
+            else if (run.Errors.Count > 0)
+                ShowProblem(run.Errors.Count == 1 ? "Translation stopped" : $"{run.Errors.Count} problems while translating",
+                    string.Join("\n", run.Errors.Concat(run.Notes).Take(12)));
         }
         catch (OperationCanceledException)
         {
@@ -372,6 +331,86 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Starts an on-this-PC service (and on first use downloads its language models) before translating, so its
+    /// progress shows in the status bar. False when it could not start or was cancelled; the reason is shown.
+    /// </summary>
+    async Task<bool> StartLocalServiceAsync(ITranslator? translator, TranslateOptions opt)
+    {
+        if (translator is not (LocalLibreTranslator or OllamaTranslator)) return true;
+        // A restart mid-run (a newly detected language) reports here too.
+        LocalLibre.Reporter ??= new Progress<string>(SetStatus);
+        LocalOllama.Reporter ??= new Progress<string>(SetStatus);
+        bool owner = _cts == null;
+        _cts ??= new CancellationTokenSource();
+        SetBusy(true);
+        try
+        {
+            if (translator is LocalLibreTranslator)
+                await LocalLibre.EnsureRunningAsync(opt.Source, opt.Target, new Progress<string>(SetStatus), _cts.Token);
+            else
+                await LocalOllama.EnsureRunningAsync(new Progress<string>(SetStatus), _cts.Token);
+            return true;
+        }
+        catch (OperationCanceledException) { SetStatus("Cancelled."); return false; }
+        catch (Exception ex) when (translator is LocalLibreTranslator && ex is not LocalLibreMissingException)
+        {
+            ShowProblem("Offline LibreTranslate could not start", ex.Message);
+            return false;
+        }
+        catch (Exception ex) { ShowError(ex); return false; }
+        finally
+        {
+            if (owner) { _cts.Dispose(); _cts = null; SetBusy(false); }
+        }
+    }
+
+    /// <summary>What happened while translating a set of pages.</summary>
+    sealed record PagesRun(List<string> Errors, List<string> Notes, Exception? SetupProblem);
+
+    /// <summary>
+    /// Translates pages of the open file in order, updating the preview and progress bar; problems are collected,
+    /// not shown. A missing key, sign-in or model stops at once (every page would fail the same way), as do three errors.
+    /// </summary>
+    async Task<PagesRun> TranslatePagesAsync(IReadOnlyList<int> pages, TranslateOptions opt, ITranslator? translator, CancellationToken ct,
+        IProgress<string>? log = null)
+    {
+        _translatedCache.Clear();
+        Progress.Maximum = pages.Count;
+        Progress.Value = 0;
+        log ??= new Progress<string>(SetStatus);
+        var run = new PagesRun(new(), new(), null);
+        foreach (var index in pages)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var result = await _session!.TranslatePageAsync(index, opt, translator, log, ct);
+                _translatedCache.Remove(index);
+                if (index == _page) ShowPage(_page);
+                if (result.Note != null) run.Notes.Add($"Page {index + 1}: {result.Note}");
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) when (ex is ClaudeCodeSetupException or MissingKeyException or LocalLibreMissingException
+                                       or OllamaMissingException or OllamaModelMissingException)
+            {
+                run.Errors.Add(ex.Message);
+                return run with { SetupProblem = ex };
+            }
+            catch (Exception ex)
+            {
+                run.Errors.Add($"Page {index + 1}: {ex.Message}");
+                if (run.Errors.Count >= 3)
+                {
+                    run.Errors.Add("Stopped after repeated errors.");
+                    break;
+                }
+            }
+            Progress.Value++;
+        }
+        return run;
+    }
+
     void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
 
     void SetBusy(bool busy)
@@ -383,6 +422,7 @@ public partial class MainWindow : Window
         CancelButton.IsEnabled = busy;
         SourceBox.IsEnabled = TargetBox.IsEnabled = ProviderBox.IsEnabled = OcrBox.IsEnabled = !busy;
         UpdateEditBar();
+        UpdateQueue();
     }
 
     void SetStatus(string text) => StatusText.Text = text;
@@ -557,8 +597,12 @@ public partial class MainWindow : Window
         StartMcp();
     }
 
+    /// <summary>Set by command-line test runs, which must leave the saved choices alone.</summary>
+    bool _keepSettings;
+
     void SaveChoices()
     {
+        if (_keepSettings) return;
         _settings.SourceLanguage = (SourceBox.SelectedItem as Language)?.Code ?? Languages.Auto;
         _settings.TargetLanguage = (TargetBox.SelectedItem as Language)?.Code ?? "en";
         _settings.Provider = (ProviderBox.SelectedItem as ProviderInfo)?.Id ?? "mymemory";

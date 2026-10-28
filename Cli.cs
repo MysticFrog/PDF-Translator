@@ -89,6 +89,19 @@ public static class Cli
                     foreach (var line in ImageRemover.Describe(doc.Pages[int.Parse(args[2]) - 1])) Console.WriteLine(line);
                     return 0;
                 }
+                case "--queue" when args.Length >= 3:
+                {
+                    // --queue out.png in1.pdf in2.pdf … [--provider id] [--to xx]: runs the window's queue, then a screenshot.
+                    var w = new MainWindow { Left = -20000, Top = 0, ShowActivated = false };
+                    w.Show();
+                    var files = args.Skip(2).TakeWhile(a => !a.StartsWith("--")).ToList();
+                    await w.RunQueueForTestAsync(files, Opt("--provider", "mymemory"), Opt("--to", "en"));
+                    w.Hide();
+                    SaveWindowImage(w, args[1]);
+                    foreach (var line in w.QueueSummary()) Console.WriteLine(line);
+                    w.Close();
+                    return 0;
+                }
                 case "--snapshot-dialog" when args.Length >= 3:
                 {
                     // --snapshot-dialog signin|mcp|settings out.png

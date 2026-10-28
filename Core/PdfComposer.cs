@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using PdfSharp.Drawing;
 using PdfSharp.Fonts;
@@ -53,7 +53,9 @@ public static class PdfComposer
             if (!overlay) continue;
 
             using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append);
-            gfx.TranslateTransform(ox, oy);
+            // PDFsharp draws as if the media box started at (0, 0); a page whose box starts elsewhere (Excel
+            // exports: [-12 12 583 854]) would get everything shifted by that origin.
+            gfx.TranslateTransform(ox + page.MediaBox.X1, oy - page.MediaBox.Y1);
             // Regions are on the page as displayed; a rotated page is drawn on unrotated.
             var frame = new PageFrame(crop.X1, crop.Y1, crop.X2, crop.Y2, page.Rotate);
             if (frame.Quarter != 0)
@@ -62,6 +64,8 @@ public static class PdfComposer
                 gfx.MultiplyTransform(new XMatrix(m11, m12, m21, m22, dx, dy));
             }
             DrawPage(gfx, result!, targetLanguage);
+            if (Environment.GetEnvironmentVariable("PDFT_PROBE") == "1")
+                gfx.DrawRectangle(XBrushes.Red, 40, 40, 6, 6);   // diagnostic: a mark at (40, 40) on the page as displayed
         }
         doc.Save(output, false);
     }

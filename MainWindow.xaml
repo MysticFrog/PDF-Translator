@@ -1,4 +1,4 @@
-<Window x:Class="PdfTranslator.MainWindow"
+﻿<Window x:Class="PdfTranslator.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="PDF Translator" Icon="/Assets/PdfTranslator.ico" Width="1400" Height="900" MinWidth="900" MinHeight="500"
@@ -34,6 +34,9 @@
                 <Button x:Name="TranslateAllButton" Content="Translate all" Click="TranslateAll_Click" IsEnabled="False" FontWeight="SemiBold" />
                 <Button x:Name="CancelButton" Content="Cancel" Click="Cancel_Click" IsEnabled="False" />
                 <Button x:Name="SaveButton" Content="Save translated PDF…" Click="Save_Click" IsEnabled="False" />
+                <Separator Margin="6,0" />
+                <ToggleButton x:Name="QueueToggle" Content="Queue" Click="QueueToggle_Click"
+                              ToolTip="Translate several PDFs one after another, each saved automatically" />
             </WrapPanel>
         </Border>
 
@@ -60,6 +63,47 @@
                            Cursor="Hand" MouseLeftButtonUp="McpText_Click" ToolTip="Click to connect Claude Code or Claude Desktop" />
                 <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis"
                            Text="Open a PDF to begin (or drop one onto the window)." />
+            </DockPanel>
+        </Border>
+
+        <!-- Queue: several files translated in turn and saved automatically -->
+        <Border x:Name="QueuePanel" DockPanel.Dock="Left" Width="300" Visibility="Collapsed"
+                Background="#F7F7F7" BorderBrush="#DDD" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Queue" FontWeight="SemiBold" Padding="8,4" Background="#E8E8E8" />
+                <StackPanel DockPanel.Dock="Top" Margin="6,6,6,2">
+                    <TextBlock TextWrapping="Wrap" Foreground="#555" FontSize="11"
+                               Text="Translated one after another with the From / To / Service / OCR above, each saved as name.&lt;language&gt;.pdf. Drop PDFs or a folder on the window to add them." />
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Content="Add files…" Click="QueueAdd_Click" Padding="8,2" Margin="0,0,4,4" />
+                        <Button x:Name="QueueRemoveButton" Content="Remove" Click="QueueRemove_Click" Padding="8,2" Margin="0,0,4,4" />
+                        <Button x:Name="QueueClearButton" Content="Clear finished" Click="QueueClear_Click" Padding="8,2" Margin="0,0,4,4" />
+                    </WrapPanel>
+                    <CheckBox x:Name="QueueFolderBox" Content="Save to a folder…" Click="QueueFolder_Click" Margin="0,2,0,0"
+                              ToolTip="Unchecked: each translation is saved next to its original" />
+                    <TextBlock x:Name="QueueFolderText" Foreground="#555" FontSize="11" TextTrimming="CharacterEllipsis" Margin="18,0,0,4" />
+                    <WrapPanel>
+                        <Button x:Name="QueueStartButton" Content="Start queue" Click="QueueStart_Click" FontWeight="SemiBold" Padding="10,3" Margin="0,0,4,0" />
+                        <Button x:Name="QueueStopButton" Content="Stop" Click="QueueStop_Click" Padding="10,3"
+                                ToolTip="Stops after cancelling the file being translated; the rest stay waiting" />
+                    </WrapPanel>
+                </StackPanel>
+                <ListBox x:Name="QueueList" Margin="6" SelectionMode="Extended" HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="QueueList_SelectionChanged" MouseDoubleClick="QueueList_MouseDoubleClick"
+                         ToolTip="Double-click: open a saved translation, or open a waiting file to look at it">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,2">
+                                <TextBlock Text="{Binding Icon}" Width="18" DockPanel.Dock="Left" VerticalAlignment="Top" />
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                    <TextBlock Text="{Binding Detail}" Foreground="#666" FontSize="11" TextWrapping="Wrap" ToolTip="{Binding Output}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
         </Border>
 

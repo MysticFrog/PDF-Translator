@@ -60,6 +60,13 @@ public static class PageRenderer
         }
         for (int x = x0; x <= x1; x += step) { Add(x, y0); Add(x, y1); }
         for (int y = y0; y <= y1; y += step) { Add(x0, y); Add(x1, y); }
+        // Inside the block too: text covers only a fraction of it, so the paper wins there even where the ring
+        // around a short block runs along table borders.
+        int ix0 = (int)Math.Ceiling(r.X * s), ix1 = (int)Math.Floor(r.Right * s);
+        int iy0 = (int)Math.Ceiling(r.Y * s), iy1 = (int)Math.Floor(r.Bottom * s);
+        int istep = Math.Max(1, (int)Math.Sqrt(Math.Max(1, (ix1 - ix0) * (iy1 - iy0)) / 600.0));
+        for (int y = iy0; y <= iy1; y += istep)
+            for (int x = ix0; x <= ix1; x += istep) Add(x, y);
 
         var best = buckets.Values.MaxBy(v => v.n);
         return new Rgb((byte)(best.r / best.n), (byte)(best.g / best.n), (byte)(best.b / best.n));

@@ -35,6 +35,8 @@ public sealed class AppSettings
     public bool McpEnabled { get; set; } = true;
     public int McpPort { get; set; } = 8765;
     public bool ShowBlockOutlines { get; set; } = true;
+    /// <summary>Where the queue saves translated files; empty = next to each original.</summary>
+    public string QueueOutputFolder { get; set; } = "";
 
     static readonly string[] SecretProps = { nameof(DeepLKey), nameof(GoogleCloudKey), nameof(AzureKey), nameof(LibreKey), nameof(AnthropicKey), nameof(ClaudeCodeToken) };
 
