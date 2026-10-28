@@ -109,7 +109,7 @@ PdfTranslator.exe --ocr-box in.pdf <page> x y w h [paddle|chi_sim+eng]   # what 
 ## Build
 
 Uses a portable .NET 8 SDK at `%USERPROFILE%\source\tools\dotnet8` (no system install). Build output goes to
-`%USERPROFILE%\source\build\PdfTranslator` (kept off Google Drive by `Directory.Build.props`).
+`%USERPROFILE%\source\build\PdfTranslator`).
 
 ```
 powershell -File build.ps1 [-Run]
