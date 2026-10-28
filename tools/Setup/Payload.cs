@@ -108,8 +108,31 @@ namespace PdfTranslator.Setup
             using (FileStream destination = File.Create(staging))
                 source.CopyTo(destination);
 
-            if (File.Exists(target)) File.Delete(target);
-            File.Move(staging, target);
+            Replace(staging, target);
+        }
+
+        /// <summary>
+        /// Moves the new file over the old one. A file something still has open (an
+        /// application that has only just closed, a virus scan) can be deleted but
+        /// keeps its name until it is let go, so the move is retried for a while
+        /// rather than leaving the file missing.
+        /// </summary>
+        private static void Replace(string staging, string target)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(target)) File.Delete(target);
+                    File.Move(staging, target);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    if (!(ex is IOException || ex is UnauthorizedAccessException) || attempt >= 50) throw;
+                    System.Threading.Thread.Sleep(200);
+                }
+            }
         }
 
         private static string Local(string zipPath)
