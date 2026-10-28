@@ -487,6 +487,9 @@ public partial class MainWindow
         if (translator is LocalLibreTranslator)
             try { await LocalLibre.EnsureRunningAsync(CurrentOptions().Source, CurrentOptions().Target, new Progress<string>(SetStatus), CancellationToken.None); }
             catch (Exception ex) { ShowProblem("Offline LibreTranslate could not start", ex.Message); return; }
+        if (translator is OllamaTranslator)
+            try { await LocalOllama.EnsureRunningAsync(new Progress<string>(SetStatus), CancellationToken.None); }
+            catch (Exception ex) { ShowError(ex); return; }
         _cts = new CancellationTokenSource();
         SetBusy(true);
         try

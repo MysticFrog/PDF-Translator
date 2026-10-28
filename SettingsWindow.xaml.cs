@@ -24,6 +24,8 @@ public partial class SettingsWindow : Window
         McpEnabled.IsChecked = _s.McpEnabled;
         OfflineStatus.Text = LocalLibre.Status();
         if (LocalLibre.IsInstalled) OfflineInstallButton.Content = "Repair…";
+        OllamaStatus.Text = LocalOllama.Status();
+        OllamaModel.Text = _s.OllamaModel;
 
         // The program: the configured path, or the one found automatically (kept automatic unless changed).
         _foundClaudeCode = ClaudeCodeTranslator.Locate(null);
@@ -43,7 +45,7 @@ public partial class SettingsWindow : Window
         {
             OcrLanguages.Text = "unavailable: " + ex.Message;
         }
-        Loaded += async (_, _) => await Task.WhenAll(LoadAccountModelsAsync(), LoadClaudeCodeModelsAsync());
+        Loaded += async (_, _) => await Task.WhenAll(LoadAccountModelsAsync(), LoadClaudeCodeModelsAsync(), LoadOllamaModelsAsync());
     }
 
     readonly string? _foundClaudeCode;
@@ -95,6 +97,38 @@ public partial class SettingsWindow : Window
             : "Empty = Claude Code's default; or type a model name.";
     }
 
+    /// <summary>The models downloaded to Ollama, as Ollama lists them.</summary>
+    async Task LoadOllamaModelsAsync()
+    {
+        if (!LocalOllama.IsInstalled)
+        {
+            OllamaModelHint.Text = $"Install first. Suggested for a laptop: {LocalOllama.SuggestedModel} (2.5 GB); with 16 GB+ memory, qwen3:8b translates better.";
+            if (OllamaModel.Text.Length == 0) OllamaModel.Text = LocalOllama.SuggestedModel;
+            return;
+        }
+        OllamaInstallButton.Content = "Download model…";
+        OllamaModelHint.Text = "Reading the downloaded models…";
+        string current = OllamaModel.Text;
+        var models = await LocalOllama.ModelsAsync();
+        OllamaStatus.Text = LocalOllama.Status();
+        if (models == null) { OllamaModelHint.Text = "Ollama didn't answer. Install… repairs it."; return; }
+        OllamaModel.ItemsSource = models;
+        if (current.Length == 0) current = models.FirstOrDefault()?.Id ?? LocalOllama.SuggestedModel;
+        OllamaModel.Text = current;
+        OllamaModelHint.Text = models.Count == 0
+            ? $"No models downloaded yet. Type one from ollama.com/library (e.g. {LocalOllama.SuggestedModel}) and press Download model…"
+            : $"{models.Count} downloaded. To add another, type its name from ollama.com/library and press Download model…";
+    }
+
+    void OllamaInstall_Click(object sender, RoutedEventArgs e)
+    {
+        string model = OllamaModel.Text.Trim();
+        if (model.Length == 0) model = LocalOllama.SuggestedModel;
+        _s.OllamaModel = model;
+        LocalOllama.StartInstall(model);
+        OllamaStatus.Text = $"Installing in the window that opened… when it says Done, choose “Offline AI (Ollama, on this PC)”.";
+    }
+
     async void AnthropicKey_LostFocus(object sender, RoutedEventArgs e) => await LoadAccountModelsAsync();
 
     void Link_Click(object sender, RoutedEventArgs e)
@@ -143,6 +177,7 @@ public partial class SettingsWindow : Window
         _s.ClaudeCodePath = string.Equals(path, _foundClaudeCode, StringComparison.OrdinalIgnoreCase) ? "" : path;
         _s.ClaudeCodeModel = ClaudeCodeModel.Text.Trim();
         _s.ClaudeCodeToken = ClaudeCodeToken.Password.Trim();
+        _s.OllamaModel = OllamaModel.Text.Trim();
         if (int.TryParse(McpPort.Text, out int port) && port is > 1024 and < 65536) _s.McpPort = port;
         DialogResult = true;
     }

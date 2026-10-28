@@ -146,6 +146,33 @@
                     </Grid>
                 </Border>
 
+                <!-- ============================== Offline AI ============================== -->
+                <Border Style="{StaticResource Section}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Offline AI — a language model on this PC (Ollama)" />
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource SectionNote}"
+                                   Text="For the service “Offline AI (Ollama, on this PC)”. Free and private; follows the meaning far better than LibreTranslate, but takes minutes per page on a laptop. Larger models translate better and run slower." />
+
+                        <TextBlock Grid.Row="2" Text="Ollama" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="OllamaStatus" TextWrapping="Wrap" Foreground="#555" />
+                        <StackPanel Grid.Row="2" Grid.Column="2" Orientation="Horizontal">
+                            <Button x:Name="OllamaInstallButton" Content="Install…" Click="OllamaInstall_Click"
+                                    ToolTip="Installs Ollama if needed and downloads the model below, in a progress window" />
+                            <Button Content="Models…" Tag="https://ollama.com/library" Click="Link_Click" ToolTip="Browse models at ollama.com/library" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="3" Text="Model" />
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="OllamaModel" Style="{StaticResource ModelBox}"
+                                  ToolTip="A downloaded model, or the name of one from ollama.com/library to download (e.g. qwen3:4b, qwen3:8b)" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="OllamaModelHint" Style="{StaticResource Hint}" />
+                    </Grid>
+                </Border>
+
                 <!-- ============================== This PC ============================== -->
                 <Border Style="{StaticResource Section}">
                     <Grid>

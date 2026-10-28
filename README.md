@@ -44,6 +44,7 @@ WPF (.NET 8) app that translates PDFs while keeping the original layout, with a 
 | Service | Needs |
 |---|---|
 | MyMemory (default) | nothing; optional e-mail raises the daily quota |
+| Offline AI (Ollama, on this PC) | nothing after a one-time install (Settings › Offline AI › Install, or `PdfTranslator.exe --install-ollama [model]`): [Ollama](https://ollama.com) in `%LOCALAPPDATA%\PdfTranslator\ollama` (about 1.6 GB download; graphics-card libraries the PC can't use are removed) plus a language model from [ollama.com/library](https://ollama.com/library), e.g. `qwen3:4b` (2.5 GB) or `qwen3:8b` (5.2 GB). An Ollama already installed on the PC is used instead. Translates a page at a time with the same instructions as Claude, so it follows meaning far better than LibreTranslate; minutes per page on a laptop CPU. Free, private, offline |
 | LibreTranslate offline (on this PC) | nothing after a one-time install (Settings › Offline translation › Install, or `PdfTranslator.exe --install-offline`): [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) with its own Python 3.11 (via uv) in `%LOCALAPPDATA%\PdfTranslator\libretranslate`, ~1 GB. The app starts it on 127.0.0.1:5099 with only the languages in use (each new pair downloads a ~100 MB model once) and stops it on exit. Free, private, offline |
 | Google Translate (free web endpoint) | nothing; unofficial – Google refuses it from some networks/clients |
 | LibreTranslate | server URL (+ key for libretranslate.com) |
@@ -140,5 +141,6 @@ Clipper2 and the Anthropic SDK. Their licences and notices are in `THIRD-PARTY-N
 program and opened from **About… › Third-party notices**. `build.ps1 -Installer` regenerates it from the restored
 packages (`tools\Notices.ps1`), so it always matches what ships.
 
-LibreTranslate (AGPL-3.0) is not bundled: the offline install downloads it from its official source onto the PC that
+Ollama (MIT) and its models (each under its own licence, e.g. Qwen3: Apache-2.0) are not bundled either: they are
+downloaded on the PC that uses offline AI. LibreTranslate (AGPL-3.0) is not bundled: the offline install downloads it from its official source onto the PC that
 uses it, where it runs as a separate program.

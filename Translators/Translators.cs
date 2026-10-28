@@ -27,6 +27,7 @@ public static class TranslatorFactory
     {
         new ProviderInfo("mymemory", "MyMemory (free)", "No key. Optional e-mail raises the daily quota (5,000 → 50,000 chars/day)."),
         new ProviderInfo("google-free", "Google Translate (free web endpoint)", "No key. Unofficial endpoint; Google may refuse it on some networks."),
+        new ProviderInfo("ollama", "Offline AI (Ollama, on this PC)", "Free and private: a small language model on this PC, which understands context far better than LibreTranslate. Slower (minutes per page on a laptop). One-time install in Settings › On this PC."),
         new ProviderInfo("libre-local", "LibreTranslate offline (on this PC)", "Free and private: runs LibreTranslate on this PC, no internet needed after the one-time install (Settings › Offline translation)."),
         new ProviderInfo("libre", "LibreTranslate (server)", "Server URL (self-hosted or libretranslate.com) and optional key."),
         new ProviderInfo("deepl", "DeepL API", "DeepL API key (Free keys end in :fx)."),
@@ -43,6 +44,7 @@ public static class TranslatorFactory
         "claude-code" => new ClaudeCodeTranslator(s.ClaudeCodePath, s.ClaudeCodeModel, s.ClaudeCodeToken),
         "google-free" => new GoogleFreeTranslator(),
         "mymemory" => new MyMemoryTranslator(s.MyMemoryEmail),
+        "ollama" => LocalOllama.IsInstalled ? new OllamaTranslator(s.OllamaModel) : throw new OllamaMissingException(),
         "libre-local" => LocalLibre.IsInstalled ? new LocalLibreTranslator() : throw new LocalLibreMissingException(),
         "libre" => new LibreTranslator(Require(id, s.LibreUrl), s.LibreKey),
         "deepl" => new DeepLTranslator(Require(id, s.DeepLKey)),

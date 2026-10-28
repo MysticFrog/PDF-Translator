@@ -15,7 +15,7 @@ public static class Cli
 {
     public const string Usage = """
         PdfTranslator.exe [file.pdf]                       open the GUI (optionally with a file)
-        PdfTranslator.exe --translate in.pdf out.pdf --to de [--from auto] [--provider mymemory] [--ocr auto|fullpage|off]
+        PdfTranslator.exe --translate in.pdf out.pdf --to de [--from auto] [--provider mymemory] [--ocr auto|fullpage|off] [--pages 1,3-5]
         PdfTranslator.exe --render in.pdf outDir [--dpi 110]   write every page as PNG
         PdfTranslator.exe --snapshot in.pdf out.png [--to de] [--provider mymemory] [--page 1]
                                                            translate one page in the GUI and save a window image
@@ -43,7 +43,7 @@ public static class Cli
                 case "--translate" when args.Length >= 3:
                     return await TranslateAsync(args[1], args[2],
                         new TranslateOptions(Opt("--from", Languages.Auto), Opt("--to", "en"), ParseOcr(Opt("--ocr", "auto"))),
-                        Opt("--provider", "mymemory"));
+                        Opt("--provider", "mymemory"), ParsePages(Opt("--pages", "")));
                 case "--render" when args.Length >= 3:
                     RenderAll(args[1], args[2], int.Parse(Opt("--dpi", "110")));
                     return 0;
@@ -111,6 +111,9 @@ public static class Cli
                         case "offline":
                             w.ShowOfflineInstall();
                             break;
+                        case "ollama":
+                            w.ShowOllamaInstall(null);
+                            break;
                         case "about":
                             w.ShowAbout();
                             break;
@@ -131,6 +134,17 @@ public static class Cli
                     await proc.WaitForExitAsync();
                     Console.WriteLine(LocalLibre.IsInstalled ? "Offline LibreTranslate installed." : "Install did not complete.");
                     return LocalLibre.IsInstalled ? 0 : 1;
+                }
+                case "--install-ollama":
+                {
+                    // Installs offline AI (Ollama + a model) in this console: same script as Settings › Offline AI › Install.
+                    string model = args.Length >= 2 ? args[1] : LocalOllama.SuggestedModel;
+                    var psi = new System.Diagnostics.ProcessStartInfo("powershell.exe",
+                        $"-NoProfile -ExecutionPolicy Bypass -File \"{LocalOllama.WriteScript(model)}\"") { UseShellExecute = false };
+                    using var proc = System.Diagnostics.Process.Start(psi)!;
+                    await proc.WaitForExitAsync();
+                    Console.WriteLine(proc.ExitCode == 0 ? $"Offline AI installed with {model}." : "Install did not complete.");
+                    return proc.ExitCode;
                 }
                 case "--version":
                     Console.WriteLine(AppInfo.Title);
@@ -157,7 +171,21 @@ public static class Cli
         _ => OcrMode.Auto,
     };
 
-    static async Task<int> TranslateAsync(string input, string output, TranslateOptions opt, string provider)
+    /// <summary>"1,3-5" → {0, 2, 3, 4}; empty means every page.</summary>
+    static HashSet<int>? ParsePages(string spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec)) return null;
+        var pages = new HashSet<int>();
+        foreach (var part in spec.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var ends = part.Split('-', 2);
+            int a = int.Parse(ends[0]), b = ends.Length == 2 ? int.Parse(ends[1]) : a;
+            for (int p = a; p <= b; p++) pages.Add(p - 1);
+        }
+        return pages;
+    }
+
+    static async Task<int> TranslateAsync(string input, string output, TranslateOptions opt, string provider, HashSet<int>? pages = null)
     {
         var translator = TranslatorFactory.Create(provider, AppSettings.Load());
         if (translator is LocalLibreTranslator)
@@ -166,14 +194,17 @@ public static class Cli
         var log = new SyncProgress(Console.WriteLine);
         for (int i = 0; i < session.PageCount; i++)
         {
+            if (pages != null && !pages.Contains(i)) continue;
+            var t0 = DateTime.UtcNow;
             var page = await session.TranslatePageAsync(i, opt, translator, log, CancellationToken.None);
             Console.WriteLine($"Page {i + 1}: {page.Regions.Count} blocks " +
-                $"({page.Regions.Count(r => r.Origin != RegionSource.TextLayer)} from OCR){(page.Note != null ? " — " + page.Note : "")}");
+                $"({page.Regions.Count(r => r.Origin != RegionSource.TextLayer)} from OCR){(page.Note != null ? " — " + page.Note : "")} in {(DateTime.UtcNow - t0).TotalSeconds:0}s");
             foreach (var r in page.Regions)
                 Console.WriteLine($"   #{r.Id} [{r.OriginLabel} {r.StyleLabel}{(r.Align != TextAlign.Left ? " " + r.Align : "")}] {Short(r.Source)}  =>  {Short(r.Translated ?? "")}");
         }
         session.Save(output);
         LocalLibre.Stop();
+        LocalOllama.Stop();
         Console.WriteLine($"Wrote {output}");
         return 0;
     }

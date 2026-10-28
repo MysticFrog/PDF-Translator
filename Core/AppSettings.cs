@@ -26,6 +26,8 @@ public sealed class AppSettings
     public string ClaudeCodePath { get; set; } = "";
     /// <summary>Model alias for Claude Code (e.g. opus, sonnet); empty = Claude Code's default.</summary>
     public string ClaudeCodeModel { get; set; } = "";
+    /// <summary>The Ollama model for offline AI translation (e.g. qwen3:4b).</summary>
+    public string OllamaModel { get; set; } = "";
     /// <summary>Long-lived sign-in token from <c>claude setup-token</c>; used when the CLI has no saved /login.</summary>
     public string ClaudeCodeToken { get; set; } = "";
 

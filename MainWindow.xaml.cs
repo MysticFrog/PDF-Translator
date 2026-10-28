@@ -49,7 +49,7 @@ public partial class MainWindow : Window
         OutlinesBox.IsChecked = _settings.ShowBlockOutlines;
 
         Loaded += (_, _) => StartMcp();
-        Closing += (_, _) => { SaveChoices(); _cts?.Cancel(); _mcp?.Dispose(); LocalLibre.Stop(); };
+        Closing += (_, _) => { SaveChoices(); _cts?.Cancel(); _mcp?.Dispose(); LocalLibre.Stop(); LocalOllama.Stop(); };
     }
 
     // ---------------------------------------------------------------- file
@@ -159,6 +159,8 @@ public partial class MainWindow : Window
             case ClaudeCodeSetupException setup: ShowClaudeCodeSetup(setup); break;
             case MissingKeyException missing: ShowMissingKey(missing.Help); break;
             case LocalLibreMissingException: ShowOfflineInstall(); break;
+            case OllamaMissingException: ShowOllamaInstall(null); break;
+            case OllamaModelMissingException m: ShowOllamaInstall(m.Model); break;
             default: ShowProblem("Something went wrong", ex.Message); break;
         }
     }
@@ -220,6 +222,24 @@ public partial class MainWindow : Window
             }, ToolTip: AppInfo.NoticesFile));
     }
 
+    /// <summary>Offline AI chosen but Ollama, or the chosen model, is not on this PC yet.</summary>
+    internal void ShowOllamaInstall(string? missingModel)
+    {
+        string model = missingModel ?? (string.IsNullOrWhiteSpace(_settings.OllamaModel) ? LocalOllama.SuggestedModel : _settings.OllamaModel);
+        string intro = missingModel != null
+            ? $"The model “{model}” isn’t downloaded yet. Download fetches it once (several GB); after that it works offline.\n\n"
+            : "“Offline AI” translates on this PC with a small language model run by Ollama (" + LocalOllama.ProjectUrl + "): " +
+              "free, private, and it follows the meaning far better than LibreTranslate. It is slower: a few minutes per page on a laptop.\n\n" +
+              "Install downloads Ollama (about 1.6 GB, kept in " + LocalOllama.Folder + ") and the model " + model + ". " +
+              "A window shows the progress; when it says Done, press Translate.\n\n";
+        ActionDialog.Show(this, missingModel != null ? "Download the model" : "Install offline AI",
+            intro + "Other models: " + LocalOllama.LibraryUrl + " — choose one in Settings › On this PC.",
+            new ActionDialog.Action(missingModel != null ? $"Download {model}" : "Install", () => LocalOllama.StartInstall(model),
+                ToolTip: "Opens a window running the install script"),
+            new ActionDialog.Action("Settings", OpenSettingsSoon, CloseAfter: true),
+            new ActionDialog.Action("Use free MyMemory instead", () => UseProvider("mymemory"), CloseAfter: true));
+    }
+
     /// <summary>Any other problem: the message (links clickable) and a way to Settings.</summary>
     void ShowProblem(string title, string message) =>
         ActionDialog.Show(this, title, message, new ActionDialog.Action("Open Settings", OpenSettingsSoon, CloseAfter: true));
@@ -275,6 +295,16 @@ public partial class MainWindow : Window
             catch (Exception ex) { ShowProblem("Offline LibreTranslate could not start", ex.Message); return; }
             finally { _cts.Dispose(); _cts = null; SetBusy(false); }
         }
+        if (translator is OllamaTranslator)
+        {
+            LocalOllama.Reporter ??= new Progress<string>(SetStatus);
+            _cts = new CancellationTokenSource();
+            SetBusy(true);
+            try { await LocalOllama.EnsureRunningAsync(new Progress<string>(SetStatus), _cts.Token); }
+            catch (OperationCanceledException) { SetStatus("Cancelled."); return; }
+            catch (Exception ex) { ShowError(ex); return; }
+            finally { _cts.Dispose(); _cts = null; SetBusy(false); }
+        }
         if (translator == null)
             SetStatus("“Extract only” finds blocks without translating. To translate with Claude, pick “Claude (Claude Code sign-in)”, " +
                       "or ask Claude in Claude Code to translate the open PDF (MCP).");
@@ -302,7 +332,8 @@ public partial class MainWindow : Window
                     if (result.Note != null) notes.Add($"Page {index + 1}: {result.Note}");
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) when (ex is ClaudeCodeSetupException or MissingKeyException or LocalLibreMissingException)
+                catch (Exception ex) when (ex is ClaudeCodeSetupException or MissingKeyException or LocalLibreMissingException
+                                           or OllamaMissingException or OllamaModelMissingException)
                 {
                     // Every page would fail the same way; stop and offer the fix.
                     setupProblem = ex;
