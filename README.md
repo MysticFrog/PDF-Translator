@@ -2,6 +2,8 @@
 
 WPF (.NET 8) app that translates PDFs while keeping the original layout, with a side-by-side original/translated preview.
 
+**VERY MUCH A WIP** there may be issues with certain PDF's
+
 ## How it works
 
 1. **Layout** – PdfPig letters (advance-width boxes, size, weight, colour) are grouped into lines by baseline, then into blocks.
