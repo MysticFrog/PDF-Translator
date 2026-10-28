@@ -79,7 +79,8 @@ if ($Installer) {
     & $dotnet build (Join-Path $root 'tools\Setup\Setup.csproj') -c Release "-p:PayloadDir=$payload\"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $setupExe = Join-Path $buildDir 'setup\bin\Release\net472\PdfTranslatorSetup.exe'
-    Get-ChildItem $distDir -Filter 'PdfTranslatorSetup-*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force
+    # An old installer that is open or still syncing (Google Drive) stays; it is not worth failing the build over.
+    Get-ChildItem $distDir -Filter 'PdfTranslatorSetup-*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     $final = Join-Path $distDir "PdfTranslatorSetup-$fileVersion.exe"
     Copy-Item $setupExe $final -Force
     Write-Host ("Installer: {0} ({1:N0} MB)" -f $final, ((Get-Item $final).Length / 1MB))
