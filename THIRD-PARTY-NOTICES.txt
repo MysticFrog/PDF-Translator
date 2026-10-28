@@ -163,10 +163,12 @@ These are fetched from their official sources on the PC that uses them, only whe
 Tesseract language data (tessdata_best)        Apache-2.0      https://github.com/tesseract-ocr/tessdata_best
 PaddleOCR PP-OCRv5 Chinese recognition model    Apache-2.0      https://github.com/PaddlePaddle/PaddleOCR
 LibreTranslate (offline translation)            AGPL-3.0        https://github.com/LibreTranslate/LibreTranslate
+Ollama (offline AI translation)                 MIT             https://github.com/ollama/ollama
+Language models for Ollama (chosen by the user) per model       https://ollama.com/library (e.g. Qwen3: Apache-2.0)
 Argos Translate language models                 per model       https://github.com/argosopentech/argos-translate
 uv (installs LibreTranslate's Python)           MIT/Apache-2.0  https://github.com/astral-sh/uv
 Python 3.11                                     PSF-2.0         https://www.python.org
-LibreTranslate runs as a separate program on this PC; PDF Translator talks to it over a local connection.
+LibreTranslate and Ollama run as separate programs on this PC; PDF Translator talks to them over a local connection.
 
 ====================================================================================================
 4. Licence texts
