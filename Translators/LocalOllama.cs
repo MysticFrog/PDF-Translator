@@ -257,9 +257,17 @@ public sealed class OllamaTranslator(string model) : ITranslator
     /// <summary>Running on a laptop processor a batch can take minutes; replies are length-capped, so this is only a backstop.</summary>
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
 
+    /// <summary>
+    /// Models that can't translate a page in one request (translation-only models such as translategemma copy
+    /// it back): they get one block per request from then on.
+    /// </summary>
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> OneAtATime = new();
+
     public async Task<IReadOnlyList<string>> TranslateAsync(IReadOnlyList<string> texts, string from, string to, CancellationToken ct)
     {
         await LocalOllama.EnsureRunningAsync(null, ct);
+        // Named, not "detect it": told to detect, models tend to take the text as translated already.
+        if (from == Languages.Auto) from = TextTools.GuessLanguage(string.Concat(texts)) ?? Languages.Auto;
         var results = new string[texts.Count];
         // Small models keep track of fewer items at once than Claude: smaller batches stay aligned.
         var batch = new List<int>();
@@ -268,16 +276,14 @@ public sealed class OllamaTranslator(string model) : ITranslator
         {
             if (batch.Count == 0) return;
             var items = batch.Select(i => texts[i]).ToList();
-            var outItems = await RunAsync(items, from, to, ct);
-            if (outItems == null || outItems.Count != items.Count)
+            var outItems = OneAtATime.ContainsKey(_model) ? null : await RunAsync(items, from, to, ct);
+            if (outItems == null || outItems.Count != items.Count || Untranslated(items, outItems, to))
             {
-                // Misaligned reply: one block per call so every translation lands on its own block.
+                // Misaligned or copied back: one block per request, so every translation lands on its own block.
+                if (outItems != null && outItems.Count == items.Count) OneAtATime[_model] = true;
                 outItems = new List<string>();
                 foreach (var item in items)
-                {
-                    var one = await RunAsync(new List<string> { item }, from, to, ct);
-                    outItems.Add(one is { Count: 1 } ? one[0] : item);
-                }
+                    outItems.Add(await RunOneAsync(item, from, to, ct) ?? item);
             }
             for (int k = 0; k < batch.Count; k++) results[batch[k]] = outItems[k];
             batch.Clear();
@@ -291,6 +297,53 @@ public sealed class OllamaTranslator(string model) : ITranslator
         }
         await Flush();
         return results;
+    }
+
+    /// <summary>
+    /// Most of the blocks that are clearly in another script than the target came back unchanged: the model
+    /// copied the page instead of translating it.
+    /// </summary>
+    static bool Untranslated(List<string> items, List<string> outItems, string to)
+    {
+        var target = TextTools.ScriptOfLanguage(to);
+        bool Foreign(string s) => TextTools.CountScripts(s).Keys.Any(k => k != target && !(target == Script.Kana && k == Script.Han));
+        var foreign = Enumerable.Range(0, items.Count).Where(i => Foreign(items[i])).ToList();
+        int copied = foreign.Count(i => Foreign(outItems[i]) &&
+            string.Equals(Squash(items[i]), Squash(outItems[i]), StringComparison.OrdinalIgnoreCase));
+        return foreign.Count > 0 && copied * 2 >= foreign.Count;
+    }
+
+    static string Squash(string s) => new(s.Where(char.IsLetterOrDigit).ToArray());
+
+    /// <summary>
+    /// One block, asked the way translation models are trained to be asked; the JSON reply keeps chat models
+    /// from thinking aloud or explaining.
+    /// </summary>
+    async Task<string?> RunOneAsync(string text, string from, string to, CancellationToken ct)
+    {
+        string target = $"{Languages.NameOf(to)} ({to})";
+        string source = from == Languages.Auto ? "source-language" : $"{Languages.NameOf(from)} ({from})";
+        string prompt =
+            $"You are a professional {source} to {target} translator. Produce only the {Languages.NameOf(to)} translation, " +
+            "without any additional explanations or commentary, as JSON {\"translation\": \"...\"}. Keep numbers, codes and " +
+            $"placeholders like {{{{1}}}} unchanged. Please translate the following text into {Languages.NameOf(to)}:\n\n\n{text}";
+        var request = new JsonObject
+        {
+            ["model"] = _model,
+            ["stream"] = false,
+            ["think"] = false,
+            ["format"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject { ["translation"] = new JsonObject { ["type"] = "string" } },
+                ["required"] = new JsonArray("translation"),
+            },
+            ["options"] = new JsonObject { ["temperature"] = 0.2, ["num_predict"] = text.Length * 3 + 100 },
+            ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = prompt }),
+        };
+        var reply = await ReplyAsync(request, ct);
+        try { return JsonNode.Parse(reply)?["translation"]?.GetValue<string>(); }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { return null; }
     }
 
     async Task<List<string>?> RunAsync(List<string> items, string from, string to, CancellationToken ct)
@@ -331,6 +384,18 @@ public sealed class OllamaTranslator(string model) : ITranslator
                 new JsonObject { ["role"] = "user", ["content"] = input }),
         };
 
+        string reply = await ReplyAsync(request, ct);
+        try
+        {
+            return JsonNode.Parse(reply)?["translations"]?.AsArray()
+                .Select(t => t?.GetValue<string>() ?? "").ToList();
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>The model's reply text; a missing model or a server error is thrown.</summary>
+    async Task<string> ReplyAsync(JsonObject request, CancellationToken ct)
+    {
         string body = await PostAsync(request, ct);
         if (body.Contains("does not support thinking", StringComparison.OrdinalIgnoreCase))
         {
@@ -343,13 +408,7 @@ public sealed class OllamaTranslator(string model) : ITranslator
             if (error.Contains("not found", StringComparison.OrdinalIgnoreCase)) throw new OllamaModelMissingException(_model);
             throw new InvalidOperationException("Offline AI (Ollama): " + error);
         }
-        string reply = node?["message"]?["content"]?.GetValue<string>() ?? "";
-        try
-        {
-            return JsonNode.Parse(reply)?["translations"]?.AsArray()
-                .Select(t => t?.GetValue<string>() ?? "").ToList();
-        }
-        catch (Exception e) when (e is JsonException or InvalidOperationException) { return null; }
+        return node?["message"]?["content"]?.GetValue<string>() ?? "";
     }
 
     static async Task<string> PostAsync(JsonObject request, CancellationToken ct)

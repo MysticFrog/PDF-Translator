@@ -190,6 +190,9 @@ public sealed class TesseractOcr : IOcrEngine
         var kept = new List<(RectD box, string text, float conf)>();
         foreach (var w in words.OrderByDescending(w => w.conf))
             if (!kept.Any(k => k.box.IntersectionArea(w.box) > Math.Min(k.box.Area, w.box.Area) * 0.4)) kept.Add(w);
+        if (Environment.GetEnvironmentVariable("PDFT_BOUNDS") == "1")
+            foreach (var k in kept.OrderBy(k => k.box.Y))
+                Console.Error.WriteLine($"ocr {k.text}({k.conf:0}) @{k.box.X:0.#},{k.box.Y:0.#} {k.box.W:0.#}×{k.box.H:0.#}");
 
         // Rebuild lines: words whose vertical centres line up.
         var lines = new List<List<(RectD box, string text, float conf)>>();
@@ -207,11 +210,13 @@ public sealed class TesseractOcr : IOcrEngine
         var result2 = new List<List<Glyph>>();
         foreach (var line in lines)
         {
+            // The lower third of the word heights: a box that runs on into the next line (common with Hangul)
+            // must not make the line bigger, nor push its baseline down onto the line below.
             var hs = line.Select(g => g.box.H).OrderBy(v => v).ToList();
-            double h = hs[hs.Count / 2];
+            double h = hs[(hs.Count - 1) / 3];
             bool cjk = line.Any(g => g.text.Any(TextTools.IsCjk));
             double size = Math.Max(4, h / (cjk ? 0.9 : 0.8));
-            double baseline = line.Max(g => g.box.Bottom);
+            double baseline = line.Where(g => g.box.H <= h * 1.4).Max(g => g.box.Bottom);
             result2.Add(line.OrderBy(g => g.box.X).Select(g => new Glyph
             {
                 Box = new RectD(g.box.X, baseline - size * 0.85, g.box.W, size),

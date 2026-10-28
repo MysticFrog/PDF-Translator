@@ -200,7 +200,8 @@ public static class Cli
             Console.WriteLine($"Page {i + 1}: {page.Regions.Count} blocks " +
                 $"({page.Regions.Count(r => r.Origin != RegionSource.TextLayer)} from OCR){(page.Note != null ? " — " + page.Note : "")} in {(DateTime.UtcNow - t0).TotalSeconds:0}s");
             foreach (var r in page.Regions)
-                Console.WriteLine($"   #{r.Id} [{r.OriginLabel} {r.StyleLabel}{(r.Align != TextAlign.Left ? " " + r.Align : "")}] {Short(r.Source)}  =>  {Short(r.Translated ?? "")}");
+                Console.WriteLine($"   #{r.Id} [{r.OriginLabel} {r.StyleLabel}{(r.Align != TextAlign.Left ? " " + r.Align : "")}] {Short(r.Source)}  =>  {Short(r.Translated ?? "")}" +
+                    (Environment.GetEnvironmentVariable("PDFT_BOUNDS") == "1" ? $"   @{r.Bounds.X:0},{r.Bounds.Y:0} {r.Bounds.W:0}×{r.Bounds.H:0}" : ""));
         }
         session.Save(output);
         LocalLibre.Stop();

@@ -52,7 +52,7 @@ public sealed class Rules
     public static Rules Detect(RasterPage page)
     {
         var rules = new Rules();
-        rules.InlineGraphicAt = (gap, size) => InkBounds(page, gap);
+        rules.InlineGraphicAt = (gap, size) => InkBounds(page, gap, size);
         double s = page.Scale;
         int minLen = (int)(18 * s);          // at least 18pt long
         double maxThick = 3.2 * s;           // at most ~3pt thick (thicker = filled shape, not a rule)
@@ -118,23 +118,43 @@ public sealed class Rules
     }
 
     /// <summary>Bounding box of the ink inside <paramref name="area"/> (points), or null when it is blank.</summary>
-    static RectD? InkBounds(RasterPage page, RectD area)
+    /// <summary>
+    /// The ink around the middle of <paramref name="area"/>: rows outward from the centre until a clear gap, so
+    /// the top of the next line (or the bottom of the one above) is not taken as part of the icon.
+    /// </summary>
+    static RectD? InkBounds(RasterPage page, RectD area, double size)
     {
         double s = page.Scale;
         int x0 = Math.Max(0, (int)Math.Ceiling(area.X * s)), x1 = Math.Min(page.Width - 1, (int)(area.Right * s));
         int y0 = Math.Max(0, (int)(area.Y * s)), y1 = Math.Min(page.Height - 1, (int)Math.Ceiling(area.Bottom * s));
-        int bx0 = int.MaxValue, by0 = int.MaxValue, bx1 = -1, by1 = -1;
+        if (y1 < y0 || x1 < x0) return null;
+        var inked = new bool[y1 - y0 + 1];
         for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1 && !inked[y - y0]; x++)
+                inked[y - y0] = page.Luma(x, y) < 170;
+        // Start at the inked row nearest the centre; blank runs up to ~0.15 em ("=", "i") still belong to it.
+        int mid = (y1 - y0) / 2, start = -1;
+        for (int d = 0; d <= inked.Length && start < 0; d++)
+            if (mid - d >= 0 && inked[mid - d]) start = mid - d;
+            else if (mid + d < inked.Length && inked[mid + d]) start = mid + d;
+        if (start < 0) return null;
+        int tolerance = Math.Max(1, (int)(0.15 * size * s));
+        int top = start, bottom = start;
+        for (int y = start - 1, blank = 0; y >= 0 && blank <= tolerance; y--)
+            if (inked[y]) { top = y; blank = 0; } else blank++;
+        for (int y = start + 1, blank = 0; y < inked.Length && blank <= tolerance; y++)
+            if (inked[y]) { bottom = y; blank = 0; } else blank++;
+
+        int bx0 = int.MaxValue, bx1 = -1;
+        for (int y = y0 + top; y <= y0 + bottom; y++)
             for (int x = x0; x <= x1; x++)
                 if (page.Luma(x, y) < 170)
                 {
                     if (x < bx0) bx0 = x;
                     if (x > bx1) bx1 = x;
-                    if (y < by0) by0 = y;
-                    if (y > by1) by1 = y;
                 }
         if (bx1 < 0) return null;
-        return new RectD(bx0 / s, by0 / s, (bx1 - bx0 + 1) / s, (by1 - by0 + 1) / s);
+        return new RectD(bx0 / s, (y0 + top) / s, (bx1 - bx0 + 1) / s, (bottom - top + 1) / s);
     }
 
     /// <summary>A vertical rule runs between x-positions <paramref name="x0"/> and <paramref name="x1"/> at height y.</summary>
