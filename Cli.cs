@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -118,7 +118,7 @@ public static class Cli
                             w.ShowAbout();
                             break;
                         default:
-                            SaveWindowImage(new SettingsWindow(AppSettings.Load()), args[2]);
+                            SaveWindowImage(new SettingsWindow(AppSettings.Load()) { MaxHeight = 4000 }, args[2]);   // every section, unscrolled
                             break;
                     }
                     w.Close();

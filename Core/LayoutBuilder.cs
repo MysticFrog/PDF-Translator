@@ -305,12 +305,22 @@ public static class LayoutBuilder
             double bestGap = double.MaxValue;
             if (!labelled && !isLabel)
                 foreach (var block in blocks)
-                    if (CanAppend(block, line, rules, origin != RegionSource.TextLayer, pitch, out double gap) && gap < bestGap) { best = block; bestGap = gap; }
+                    if (CanAppend(block, line, rules, origin != RegionSource.TextLayer, pitch, out double gap) && gap < bestGap &&
+                        !LineBetween(lines, block[^1], line)) { best = block; bestGap = gap; }
             if (best != null) best.Add(line);
             else blocks.Add(new List<LineSeg> { line });
         }
         return blocks.Select(b => ToRegion(b, origin, pageWidth)).ToList();
     }
+
+    /// <summary>
+    /// Another line sits between the two, under the one and over the other: a paragraph never skips a line
+    /// (the "e.g." line under a bullet doesn't continue the item above the bullet).
+    /// </summary>
+    static bool LineBetween(List<LineSeg> lines, LineSeg above, LineSeg below) =>
+        lines.Any(o => !ReferenceEquals(o, above) && !ReferenceEquals(o, below) &&
+                       o.Bounds.Y > above.Bounds.Y + 0.5 * above.Size && o.Bounds.Y < below.Bounds.Y - 0.5 * below.Size &&
+                       o.Bounds.HorizontalOverlap(above.Bounds) > 0 && o.Bounds.HorizontalOverlap(below.Bounds) > 0);
 
     /// <param name="ocr">OCR lines: only tightly stacked lines (a wrapped label) belong together; stacked
     /// labels in diagrams sit further apart.</param>

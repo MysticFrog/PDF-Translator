@@ -114,6 +114,48 @@ public sealed class TextRegion
         $"{(FontSizeOverride ?? FontSize):0.#}{(Bold ? " B" : BoldLead ? " b:" : "")}{(Italic ? " I" : "")}";
 }
 
+/// <summary>
+/// The page as it is displayed: crop-box relative, top-left origin, with the page's /Rotate applied, so a
+/// landscape page stored as a rotated portrait one is read, laid out and drawn left to right like any other.
+/// </summary>
+/// <param name="Left">Crop box in PDF user space (bottom-left origin).</param>
+public readonly record struct PageFrame(double Left, double Bottom, double Right, double Top, int Rotation)
+{
+    /// <summary>Clockwise quarter turns, 0..3.</summary>
+    public int Quarter => ((Rotation / 90 % 4) + 4) % 4;
+    double W => Right - Left;
+    double H => Top - Bottom;
+    public double Width => Quarter % 2 == 0 ? W : H;
+    public double Height => Quarter % 2 == 0 ? H : W;
+
+    /// <summary>A point in PDF user space, on the displayed page.</summary>
+    public (double X, double Y) ToDisplay(double x, double y)
+    {
+        double u = x - Left, v = y - Bottom;
+        return Quarter switch { 1 => (v, u), 2 => (W - u, v), 3 => (H - v, W - u), _ => (u, H - v) };
+    }
+
+    /// <summary>A rectangle in PDF user space (any two opposite corners), on the displayed page.</summary>
+    public RectD ToDisplay(double x0, double y0, double x1, double y1)
+    {
+        var a = ToDisplay(x0, y0);
+        var b = ToDisplay(x1, y1);
+        return new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+    }
+
+    /// <summary>
+    /// Matrix (m11, m12, m21, m22, dx, dy) from displayed-page points to the unrotated crop box with a top-left
+    /// origin, for drawing onto the page: x' = x·m11 + y·m21 + dx, y' = x·m12 + y·m22 + dy.
+    /// </summary>
+    public (double, double, double, double, double, double) DisplayToPage() => Quarter switch
+    {
+        1 => (0, -1, 1, 0, 0, H),
+        2 => (-1, 0, 0, -1, W, H),
+        3 => (0, 1, -1, 0, W, 0),
+        _ => (1, 0, 0, 1, 0, 0),
+    };
+}
+
 public sealed class PageResult
 {
     public int Index { get; init; }
@@ -123,6 +165,8 @@ public sealed class PageResult
     public double CropOffsetX { get; init; }
     public double CropOffsetY { get; init; }
     public int Rotation { get; init; }
+    /// <summary>How the page is displayed; regions are in its coordinates.</summary>
+    [JsonIgnore] internal PageFrame Frame { get; init; }
     public List<TextRegion> Regions { get; } = new();
     /// <summary>Table borders / rules found on the page (used to keep cells apart).</summary>
     public List<RectD> Rules { get; } = new();

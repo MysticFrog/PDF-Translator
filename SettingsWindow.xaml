@@ -152,7 +152,7 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Offline AI — a language model on this PC (Ollama)" />
                         <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource SectionNote}"
@@ -160,16 +160,24 @@
 
                         <TextBlock Grid.Row="2" Text="Ollama" />
                         <TextBlock Grid.Row="2" Grid.Column="1" x:Name="OllamaStatus" TextWrapping="Wrap" Foreground="#555" />
-                        <StackPanel Grid.Row="2" Grid.Column="2" Orientation="Horizontal">
-                            <Button x:Name="OllamaInstallButton" Content="Install…" Click="OllamaInstall_Click"
-                                    ToolTip="Installs Ollama if needed and downloads the model below, in a progress window" />
-                            <Button Content="Models…" Tag="https://ollama.com/library" Click="Link_Click" ToolTip="Browse models at ollama.com/library" />
-                        </StackPanel>
 
-                        <TextBlock Grid.Row="3" Text="Model" />
-                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="OllamaModel" Style="{StaticResource ModelBox}"
-                                  ToolTip="A downloaded model, or the name of one from ollama.com/library to download (e.g. qwen3:4b, qwen3:8b)" />
+                        <!-- Which downloaded model translates. -->
+                        <TextBlock Grid.Row="3" Text="Use model" />
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="OllamaModel" Style="{StaticResource ModelBox}" IsEditable="False"
+                                  SelectedValuePath="Id" DropDownOpened="OllamaModel_DropDownOpened"
+                                  ToolTip="The models already downloaded to this PC" />
                         <TextBlock Grid.Row="4" Grid.Column="1" x:Name="OllamaModelHint" Style="{StaticResource Hint}" />
+
+                        <!-- Getting another one. -->
+                        <TextBlock Grid.Row="5" Text="Download a model" />
+                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="OllamaDownloadName"
+                                 ToolTip="A model name as ollama.com/library shows it: family:size, e.g. qwen3:8b" />
+                        <StackPanel Grid.Row="5" Grid.Column="2" Orientation="Horizontal">
+                            <Button x:Name="OllamaInstallButton" Content="Download" Click="OllamaInstall_Click"
+                                    ToolTip="Downloads this model (and installs Ollama first if needed), in a progress window" />
+                            <Button Content="Browse…" Tag="https://ollama.com/library" Click="Link_Click" ToolTip="Browse models at ollama.com/library" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="6" Grid.Column="1" x:Name="OllamaDownloadHint" Style="{StaticResource Hint}" />
                     </Grid>
                 </Border>
 

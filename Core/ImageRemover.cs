@@ -38,7 +38,9 @@ public static class ImageRemover
     {
         var result = new List<PageImage>();
         var crop = CropOf(page);
-        RectD ToTopLeft(double x0, double y0, double x1, double y1) => new(x0 - crop.X1, crop.Y2 - y1, x1 - x0, y1 - y0);
+        // On the page as displayed (rotated pages included), like the text blocks.
+        var frame = new PageFrame(crop.X1, crop.Y1, crop.X2, crop.Y2, page.Rotate);
+        RectD ToTopLeft(double x0, double y0, double x1, double y1) => frame.ToDisplay(x0, y0, x1, y1);
 
         CSequence content;
         try { content = ContentReader.ReadContent(page); }

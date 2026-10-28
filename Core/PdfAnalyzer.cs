@@ -16,38 +16,71 @@ public sealed class PdfAnalyzer : IDisposable
 
     public sealed record PageLayout(PageResult Page, List<RectD> Images, int LetterCount);
 
-    /// <summary>Page geometry only (size, crop offset, rotation).</summary>
+    /// <summary>
+    /// PdfPig already turns a rotated page's content upright (letters, images and Width/Height are as
+    /// displayed, origin at the bottom left), so only an unrotated page needs its crop-box offset removed.
+    /// </summary>
+    static PageFrame FrameOf(Page page)
+    {
+        if (page.Rotation.Value % 360 != 0) return new PageFrame(0, 0, page.Width, page.Height, 0);
+        var crop = page.CropBox.Bounds;
+        return new PageFrame(crop.Left, crop.Bottom, crop.Right, crop.Top, 0);
+    }
+
+    static RectD ToDisplay(PageFrame frame, PdfRectangle r) => frame.ToDisplay(r.Left, r.Bottom, r.Right, r.Top);
+
+    /// <summary>Page geometry only (size as displayed, crop offset, rotation).</summary>
     public PageResult Geometry(int pageIndex)
     {
         var page = _doc.GetPage(pageIndex + 1);
         var crop = page.CropBox.Bounds;
         var media = page.MediaBox.Bounds;
+        var frame = FrameOf(page);
         return new PageResult
         {
             Index = pageIndex,
-            Width = crop.Width,
-            Height = crop.Height,
+            Width = frame.Width,
+            Height = frame.Height,
             CropOffsetX = crop.Left - media.Left,
             CropOffsetY = media.Top - crop.Top,
             Rotation = page.Rotation.Value,
+            Frame = frame,
         };
     }
 
     public PageLayout Analyze(int pageIndex, Rules rules)
     {
         var page = _doc.GetPage(pageIndex + 1);
-        var crop = page.CropBox.Bounds;
         var result = Geometry(pageIndex);
-        RectD ToTopLeft(PdfRectangle r) => new(r.Left - crop.Left, crop.Top - r.Top, r.Width, r.Height);
+        var frame = result.Frame;
 
         var glyphs = new List<Glyph>();
+        // Letters already placed, by text: the same text drawn again on top (a shadow, an outline, fake bold)
+        // is one letter, not two.
+        var placed = new Dictionary<string, List<(double x, double y)>>();
         foreach (var l in page.Letters)
         {
             if (string.IsNullOrWhiteSpace(l.Value) || l.TextOrientation != TextOrientation.Horizontal) continue;
             double size = l.PointSize > 0.5 ? l.PointSize : Math.Max(4, l.GlyphRectangle.Height);
+            var (x0, baseline) = frame.ToDisplay(l.StartBaseLine.X, l.StartBaseLine.Y);
+            if (placed.TryGetValue(l.Value, out var same)
+                && same.Any(p => Math.Abs(p.x - x0) < size * 0.15 && Math.Abs(p.y - baseline) < size * 0.15)) continue;
+            if (same == null) placed[l.Value] = same = new();
+            same.Add((x0, baseline));
+            // A dingbat font's arrow or check mark that reads as a letter ("Æ") is a picture, not text: it is
+            // carried as an icon inside the translated sentence.
+            if (IsDingbatFont(l.FontName) && l.Value.Any(char.IsLetterOrDigit))
+            {
+                var g = l.GlyphRectangle;
+                var icon = frame.ToDisplay(g.Left, g.Bottom, g.Right, g.Top);
+                glyphs.Add(new Glyph
+                {
+                    Box = icon.W > 0.5 && icon.H > 0.5 ? icon : new RectD(x0, baseline - size * 0.82, size, size),
+                    Text = Rules.InlineMarker, Size = size, Baseline = baseline, Color = ColorOf(l), Font = l.FontName ?? "",
+                });
+                continue;
+            }
             // Advance-width em boxes: tight glyph outlines make narrow glyphs ("1", "）") look like word gaps.
-            double baseline = crop.Top - l.StartBaseLine.Y;
-            double x0 = l.StartBaseLine.X - crop.Left;
             double adv = Math.Abs(l.EndBaseLine.X - l.StartBaseLine.X);
             if (adv < 0.05) adv = Math.Max(l.Width, l.GlyphRectangle.Width);
             var box = new RectD(x0, baseline - size * 0.82, Math.Max(0.1, adv), size);
@@ -74,20 +107,20 @@ public sealed class PdfAnalyzer : IDisposable
         var images = new List<RectD>();
         foreach (var img in page.GetImages())
         {
-            var r = ToTopLeft(img.BoundingBox);
+            var r = ToDisplay(frame, img.BoundingBox);
             // Small images matter too: captions and labels are often pasted in as 8-10 pt tall pictures.
             if (r.W > 12 && r.H > 4) images.Add(r);
         }
         return new PageLayout(result, images, glyphs.Count);
     }
 
-    /// <summary>Every image drawn on the page, in drawing order (top-left points, crop-box relative).</summary>
+    /// <summary>Every image drawn on the page, in drawing order (top-left points on the page as displayed).</summary>
     public List<RectD> Images(int pageIndex)
     {
         var page = _doc.GetPage(pageIndex + 1);
-        var crop = page.CropBox.Bounds;
+        var frame = FrameOf(page);
         return page.GetImages()
-            .Select(i => new RectD(i.BoundingBox.Left - crop.Left, crop.Top - i.BoundingBox.Top, i.BoundingBox.Width, i.BoundingBox.Height))
+            .Select(i => ToDisplay(frame, i.BoundingBox))
             .Where(r => r.W > 2 && r.H > 2)
             .ToList();
     }
@@ -95,10 +128,20 @@ public sealed class PdfAnalyzer : IDisposable
     /// <summary>Diagnostic listing of the letters on a page (value, font, size, rendering mode, detected style).</summary>
     public IEnumerable<string> DumpLetters(int pageIndex)
     {
-        foreach (var l in _doc.GetPage(pageIndex + 1).Letters)
+        var page = _doc.GetPage(pageIndex + 1);
+        yield return $"page {page.Width:0.#}×{page.Height:0.#} rotate={page.Rotation.Value} " +
+                     $"media={page.MediaBox.Bounds} crop={page.CropBox.Bounds}";
+        foreach (var l in page.Letters)
             yield return $"{l.Value} U+{(l.Value.Length > 0 ? ((int)l.Value[0]).ToString("X4") : "----")} " +
                          $"x={l.StartBaseLine.X:0.0} y={l.StartBaseLine.Y:0.0} size={l.PointSize:0.#} font={l.FontName} " +
                          $"mode={l.RenderingMode} bold={IsBold(l)} italic={IsItalic(l)}";
+    }
+
+    /// <summary>Picture fonts (arrows, check marks, pointing hands), whose letters are not text.</summary>
+    static bool IsDingbatFont(string? name)
+    {
+        string f = (name ?? "").ToLowerInvariant();
+        return f.Contains("wingding") || f.Contains("webding") || f.Contains("dingbat") || f.Contains("marlett");
     }
 
     static bool IsBold(Letter l)

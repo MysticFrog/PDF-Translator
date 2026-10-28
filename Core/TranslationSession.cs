@@ -45,13 +45,6 @@ public sealed class TranslationSession : IDisposable
 
         log?.Report($"Page {index + 1}: analysing layout");
         var geometry = _analyzer.Geometry(index);
-        if (geometry.Rotation % 360 != 0)
-        {
-            geometry.Note = $"Page is rotated {geometry.Rotation}°; it is copied unchanged.";
-            Pages[index] = geometry;
-            return geometry;
-        }
-
         var raster = await Task.Run(() => PageRenderer.Render(Bytes, index, OcrDpi, geometry.Width), ct);
         var rules = await Task.Run(() => Rules.Detect(raster), ct);
         var layout = await Task.Run(() => _analyzer.Analyze(index, rules), ct);
@@ -236,7 +229,6 @@ public sealed class TranslationSession : IDisposable
     {
         TargetLanguage = opt.Target;
         var page = await AnalyzePageAsync(index, opt.Ocr, opt.Source, log, ct);
-        if (page.Rotation % 360 != 0) return page;
         if (translator != null)
             await TranslateRegionsAsync(page.Regions.Where(r => !r.ManualText).ToList(), page, opt, translator, log, $"Page {index + 1}", ct);
         page.Translated = true;

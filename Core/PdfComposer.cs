@@ -49,11 +49,18 @@ public static class PdfComposer
             if (deletedImages.TryGetValue(i, out var deleted) && deleted.Count > 0)
                 ImageRemover.Remove(page, deleted);
 
-            bool overlay = result != null && result.Rotation % 360 == 0 && result.Regions.Any(r => r.HasOverlay);
+            bool overlay = result != null && result.Regions.Any(r => r.HasOverlay);
             if (!overlay) continue;
 
             using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append);
             gfx.TranslateTransform(ox, oy);
+            // Regions are on the page as displayed; a rotated page is drawn on unrotated.
+            var frame = new PageFrame(crop.X1, crop.Y1, crop.X2, crop.Y2, page.Rotate);
+            if (frame.Quarter != 0)
+            {
+                var (m11, m12, m21, m22, dx, dy) = frame.DisplayToPage();
+                gfx.MultiplyTransform(new XMatrix(m11, m12, m21, m22, dx, dy));
+            }
             DrawPage(gfx, result!, targetLanguage);
         }
         doc.Save(output, false);
