@@ -44,6 +44,9 @@ namespace PdfTranslator.Setup
         public string Directory { get; set; }
         public bool DesktopShortcut { get; set; }
 
+        /// <summary>Files only (and a private .NET when needed): no shortcuts, registry entry or uninstaller.</summary>
+        public bool Portable { get; set; }
+
         /// <summary>Progress, from 0 to 1, with the file being written.</summary>
         public Action<double, string> Progress { get; set; }
 
@@ -186,11 +189,27 @@ namespace PdfTranslator.Setup
         {
             System.IO.Directory.CreateDirectory(Directory);
 
-            // Extraction is nearly all of the work: 0 .. 0.9 of the bar.
+            // The small installer's application needs .NET: fetched first, so a PC without internet gets a
+            // clear message and nothing half-installed. The bar: runtime 0 .. 0.4, files up to 0.9.
+            string channel = DotNetRuntime.Channel;
+            double start = 0;
+            if (channel != null && !DotNetRuntime.IsPresent(channel, Directory))
+            {
+                DotNetRuntime.Ensure(channel, Scope, Directory, delegate (double f, string what) { Report(0.4 * f, what); });
+                start = 0.4;
+            }
+
+            IList<string> files = Payload.Names();
             Payload.ExtractAll(Directory, delegate (int i, int count, string name)
             {
-                Report(0.9 * i / Math.Max(1, count), name);
+                Report(start + (0.9 - start) * i / Math.Max(1, count), name);
             });
+            RemoveLeftovers(files);
+            if (Portable)
+            {
+                Report(1, "Done");
+                return;
+            }
 
             Report(0.92, "Shortcuts");
             WriteShortcuts();
@@ -200,6 +219,40 @@ namespace PdfTranslator.Setup
             Register();
 
             Report(1, "Done");
+        }
+
+        /// <summary>The list of files the last install put in the program folder.</summary>
+        private string ManifestPath { get { return Path.Combine(Directory, "install-files.txt"); } }
+
+        /// <summary>
+        /// Removes files an earlier version installed that this one doesn't carry, then records this one's.
+        /// Matters most when a self-contained install is replaced by the small one: a runtime left beside the
+        /// program (hostfxr.dll and the rest) would make it start as self-contained, with parts missing.
+        /// Installs from before the list existed: the program folder's top-level files not in this payload.
+        /// </summary>
+        private void RemoveLeftovers(IList<string> files)
+        {
+            HashSet<string> current = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
+            IEnumerable<string> previous;
+            if (File.Exists(ManifestPath))
+                previous = File.ReadAllLines(ManifestPath);
+            else
+            {
+                List<string> top = new List<string>();
+                foreach (string path in System.IO.Directory.GetFiles(Directory)) top.Add(Path.GetFileName(path));
+                previous = top;
+            }
+
+            foreach (string name in previous)
+            {
+                if (name.Length == 0 || current.Contains(name)) continue;
+                if (string.Equals(name, "Uninstall.exe", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, Path.GetFileName(ManifestPath), StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith(DotNetRuntime.PrivateFolder + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+                Delete(Path.Combine(Directory, name));
+            }
+            RemoveEmptyFolders(Directory);
+            File.WriteAllLines(ManifestPath, files);
         }
 
         private void Report(double fraction, string what)
@@ -312,6 +365,9 @@ namespace PdfTranslator.Setup
             }
 
             foreach (string name in Payload.Names()) Delete(Path.Combine(Directory, name));
+            Delete(ManifestPath);
+            // A runtime unpacked beside the program belongs to it; a machine-wide one stays (others may use it).
+            DotNetRuntime.RemovePrivate(Directory);
             RemoveEmptyFolders(Directory);
 
             if (removeData)

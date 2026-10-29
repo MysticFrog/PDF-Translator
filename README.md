@@ -1,6 +1,6 @@
 # PDF Translator
 
-WPF (.NET 8) app that translates PDFs while keeping the original layout, with a side-by-side original/translated preview.
+WPF (.NET 10) app that translates PDFs while keeping the original layout, with a side-by-side original/translated preview.
 
 **VERY MUCH A WIP** there may be issues with certain PDF's
 
@@ -86,7 +86,7 @@ claude mcp add --transport http pdf-translator http://localhost:8765/mcp
 Claude Desktop (stdio; starts the app if it isn't running) – in `claude_desktop_config.json`:
 
 ```json
-"mcpServers": { "pdf-translator": { "command": "C:\\Users\\<you>\\source\\build\\PdfTranslator\\bin\\Release\\net8.0-windows10.0.19041.0\\win-x64\\PdfTranslator.exe", "args": ["--mcp-stdio"] } }
+"mcpServers": { "pdf-translator": { "command": "C:\\Users\\<you>\\source\\build\\PdfTranslator\\bin\\Release\\net10.0-windows10.0.19041.0\\win-x64\\PdfTranslator.exe", "args": ["--mcp-stdio"] } }
 ```
 
 Tools: `get_status`, `open_pdf`, `set_options`, `analyze_page`, `get_blocks`, `get_page_image`, `set_translations`, `translate_page`,
@@ -110,18 +110,29 @@ PdfTranslator.exe --ocr-box in.pdf <page> x y w h [paddle|chi_sim+eng]   # what 
 
 ## Build
 
-Uses a portable .NET 8 SDK at `%USERPROFILE%\source\tools\dotnet8` (no system install). Build output goes to
-`%USERPROFILE%\source\build\PdfTranslator`).
+Uses a portable .NET 10 SDK at `%USERPROFILE%\source\tools\dotnet10` (no system install). Build output goes to
+`%USERPROFILE%\source\build\PdfTranslator`). The built app needs the .NET 10 Desktop Runtime; `build.ps1 -Run` points it at
+the SDK's copy.
 
 ```
 powershell -File build.ps1 [-Run]
 powershell -File build.ps1 -Installer
 ```
 
-`-Installer` publishes the app self-contained (no .NET install needed on the target PC) to `dist\PdfTranslator` and builds
-`dist\PdfTranslatorSetup-<version>.exe`, a single-file installer in the BasicConnect style (`tools\Setup`, .NET Framework 4.7.2):
-per-user by default, all-users with elevation on request, folder choice, desktop shortcut, Add/Remove Programs entry, and an
-`Uninstall.exe` copy of itself. Command line: `/S` silent, `/allusers`, `/D="C:\Path"`, `/nodesktop`, `/uninstall`.
+`-Installer` builds two single-file installers in the BasicConnect style (`tools\Setup`, .NET Framework 4.7.2, which every
+Windows 10/11 PC has):
+
+- `dist\PdfTranslatorSetup-<version>.exe` (~45 MB): the app without .NET. When the PC has no .NET 10 Desktop Runtime, setup
+  downloads the newest one from Microsoft (taken from Microsoft's release list, checked against its SHA-512): for **all users**
+  Microsoft's runtime installer, run quietly (machine-wide, patched by Microsoft Update); for **just me** Microsoft's zips,
+  unpacked into a `dotnet` folder beside the program — no administrator rights. The app's launcher looks there first, then
+  in the machine-wide locations (`AppHostRelativeDotNet`).
+- `dist\PdfTranslatorSetup-<version>-offline.exe` (~105 MB): self-contained, nothing to download (also published to `dist\PdfTranslator`).
+
+Both: per-user by default, all-users with elevation on request, folder choice, desktop shortcut, Add/Remove Programs entry,
+and an `Uninstall.exe` copy of themselves; files from an earlier version that the new one doesn't carry are removed.
+Command line: `/S` silent, `/allusers`, `/D="C:\Path"`, `/nodesktop`, `/uninstall`, and `/S /portable /D="C:\Path"` for just
+the program files (and a private .NET when needed) without shortcuts or registry entries.
 An `EULA.txt` in the project root is shown and must be accepted when present.
 
 The icon is `Assets\PdfTranslator.ico`, generated from `PDF_TRANSLATE.png` by `tools\make-icon.ps1`

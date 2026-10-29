@@ -41,15 +41,15 @@ public static class PageRenderer
         }
     }
 
-    /// <summary>Most common colour on the outline just outside <paramref name="r"/>: the region's background.</summary>
+    /// <summary>
+    /// The region's background: the colour that fills most of the inside of <paramref name="r"/> (text covers
+    /// only a fraction of it), else the most common colour on the outline just outside it.
+    /// </summary>
     public static Rgb SampleBackground(RasterPage page, RectD r)
     {
         // Quantised buckets find the dominant colour despite noise; the bucket's exact average is returned.
         var buckets = new Dictionary<int, (int n, long r, long g, long b)>();
         double s = page.Scale;
-        int x0 = (int)Math.Floor((r.X - 1.5) * s), x1 = (int)Math.Ceiling((r.Right + 1.5) * s);
-        int y0 = (int)Math.Floor((r.Y - 1.5) * s), y1 = (int)Math.Ceiling((r.Bottom + 1.5) * s);
-        int step = Math.Max(1, (x1 - x0 + y1 - y0) / 400);
 
         void Add(int x, int y)
         {
@@ -58,17 +58,29 @@ public static class PageRenderer
             var t = buckets.GetValueOrDefault(key);
             buckets[key] = (t.n + 1, t.r + c.R, t.g + c.G, t.b + c.B);
         }
-        for (int x = x0; x <= x1; x += step) { Add(x, y0); Add(x, y1); }
-        for (int y = y0; y <= y1; y += step) { Add(x0, y); Add(x1, y); }
-        // Inside the block too: text covers only a fraction of it, so the paper wins there even where the ring
-        // around a short block runs along table borders.
+
+        // Inside first: the outline of a short block in a table runs along the cell borders, top and bottom,
+        // and would make the background black.
         int ix0 = (int)Math.Ceiling(r.X * s), ix1 = (int)Math.Floor(r.Right * s);
         int iy0 = (int)Math.Ceiling(r.Y * s), iy1 = (int)Math.Floor(r.Bottom * s);
         int istep = Math.Max(1, (int)Math.Sqrt(Math.Max(1, (ix1 - ix0) * (iy1 - iy0)) / 600.0));
+        int inside = 0;
         for (int y = iy0; y <= iy1; y += istep)
-            for (int x = ix0; x <= ix1; x += istep) Add(x, y);
+            for (int x = ix0; x <= ix1; x += istep) { Add(x, y); inside++; }
+        if (inside > 0 && buckets.Values.MaxBy(v => v.n) is var paper && paper.n >= inside * 0.4)
+            return new Rgb((byte)(paper.r / paper.n), (byte)(paper.g / paper.n), (byte)(paper.b / paper.n));
+
+        // No clear colour inside (text on a photo or pattern): the outline decides, with the inside counted too.
+        int x0 = (int)Math.Floor((r.X - 1.5) * s), x1 = (int)Math.Ceiling((r.Right + 1.5) * s);
+        int y0 = (int)Math.Floor((r.Y - 1.5) * s), y1 = (int)Math.Ceiling((r.Bottom + 1.5) * s);
+        int step = Math.Max(1, (x1 - x0 + y1 - y0) / 400);
+        for (int x = x0; x <= x1; x += step) { Add(x, y0); Add(x, y1); }
+        for (int y = y0; y <= y1; y += step) { Add(x0, y); Add(x1, y); }
 
         var best = buckets.Values.MaxBy(v => v.n);
+        if (Environment.GetEnvironmentVariable("PDFT_BOUNDS") == "1" && best.r + best.g + best.b < best.n * 60)
+            Console.Error.WriteLine($"bg dark @{r.X:0},{r.Y:0} {r.W:0}x{r.H:0} " +
+                string.Join(" ", buckets.OrderByDescending(b => b.Value.n).Take(4).Select(b => $"{b.Value.r / b.Value.n},{b.Value.g / b.Value.n},{b.Value.b / b.Value.n}×{b.Value.n}")));
         return new Rgb((byte)(best.r / best.n), (byte)(best.g / best.n), (byte)(best.b / best.n));
     }
 

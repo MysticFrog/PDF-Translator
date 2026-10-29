@@ -274,11 +274,27 @@ namespace PdfTranslator.Setup
 
             string installed = Installer.InstalledVersion(_installer.Scope);
 
-            _detail.Text = installed == null
+            _detail.Text = (installed == null
                 ? "Translates PDFs keeping their layout. Version " +
                   Installer.ProductVersion + ", " + Megabytes() + " MB."
                 : "Version " + installed + " is installed here already, and will be " +
-                  "replaced with " + Installer.ProductVersion + ".";
+                  "replaced with " + Installer.ProductVersion + ".") + RuntimeNote();
+        }
+
+        /// <summary>What happens about .NET with the scope chosen, when this installer doesn't carry it.</summary>
+        private string RuntimeNote()
+        {
+            string channel = DotNetRuntime.Channel;
+            if (channel == null) return "";
+            string folder = _directory != null ? _directory.Text.Trim() : _installer.Directory;
+            if (DotNetRuntime.IsPresent(channel, folder))
+                return "\n\nIt runs on Microsoft .NET " + channel + ", which this PC already has.";
+            return "\n\nIt runs on Microsoft .NET " + channel + ", which this PC doesn't have yet. " +
+                   (_installer.Scope == Scope.AllUsers
+                       ? "Setup downloads it from Microsoft (about 60 MB) and installs it for everyone."
+                       : "Setup downloads it from Microsoft (about 70 MB) into the program's own folder - " +
+                         "no administrator password needed, and nothing else on the PC changes.") +
+                   " No internet? Use the offline installer, which has it inside.";
         }
 
         private string Megabytes()
@@ -421,8 +437,7 @@ namespace PdfTranslator.Setup
             }
 
             _headline.Text = Installer.ProductName + " is installed";
-            _detail.Text = "It is in " + _installer.Directory +
-                           ", and in the Start menu. Sample projects are in the samples folder.";
+            _detail.Text = "It is in " + _installer.Directory + ", and in the Start menu.";
 
             _launch = new CheckBox();
             _launch.Content = Label("Start " + Installer.ProductName + " now", 12, Brushes.Black);

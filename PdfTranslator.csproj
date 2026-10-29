@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
@@ -29,6 +29,19 @@
     <Optimize>true</Optimize>
     <DebugType>none</DebugType>
     <SelfContained>true</SelfContained>
+  </PropertyGroup>
+
+  <!--
+    "Slim" is Release for the small installer: framework-dependent, so .NET is not inside it. The installer
+    puts the runtime either machine-wide or, without administrator rights, in a "dotnet" folder beside the
+    program; the launcher looks there first, then in the usual machine-wide places.
+  -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Slim' ">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <SelfContained>false</SelfContained>
+    <AppHostRelativeDotNet>dotnet</AppHostRelativeDotNet>
+    <AppHostDotNetSearch>AppRelative;Global</AppHostDotNetSearch>
   </PropertyGroup>
 
   <ItemGroup>
@@ -63,7 +76,6 @@
     <PackageReference Include="Tesseract" Version="5.2.0" />
     <PackageReference Include="RapidOcrNet" Version="4.2.0" />
     <PackageReference Include="Anthropic" Version="13.3.0" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <!-- version.commits+hash[.dirty] on every build -->

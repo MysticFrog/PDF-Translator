@@ -71,6 +71,8 @@ namespace PdfTranslator.Setup
     ///   PdfTranslatorSetup.exe /S /allusers        silent, all users - must already be elevated
     ///   PdfTranslatorSetup.exe /D="C:\Path"        install somewhere else
     ///   PdfTranslatorSetup.exe /nodesktop          no desktop shortcut
+    ///   PdfTranslatorSetup.exe /S /portable /D=X   just the program (and its own .NET if needed) in X: no
+    ///                                              shortcuts, registry entry or uninstaller - delete X to remove
     ///   PdfTranslatorSetup.exe /uninstall [/S]     remove it
     ///
     /// A silent all-users install that is not already elevated fails with a message
@@ -85,6 +87,12 @@ namespace PdfTranslator.Setup
             bool silent = Has(args, "/S");
             bool uninstalling = Has(args, "/uninstall");
             bool noDesktop = Has(args, "/nodesktop");
+            bool portable = Has(args, "/portable");
+            if (portable && (!silent || uninstalling || Directory(args) == null))
+            {
+                Console.Error.WriteLine("/portable is used as: /S /portable /D=\"folder\"");
+                return 2;
+            }
 
             Scope scope = Has(args, "/allusers") ? Scope.AllUsers : Scope.CurrentUser;
             string directory = Directory(args);
@@ -123,7 +131,7 @@ namespace PdfTranslator.Setup
                 directory = null;
             }
 
-            if (silent) return Silent(uninstalling, scope, directory, !noDesktop);
+            if (silent) return Silent(uninstalling, scope, directory, !noDesktop, portable);
 
             Application app = new Application();
             app.ShutdownMode = ShutdownMode.OnMainWindowClose;
@@ -133,7 +141,7 @@ namespace PdfTranslator.Setup
         }
 
         private static int Silent(bool uninstalling, Scope scope, string directory,
-                                  bool desktopShortcut)
+                                  bool desktopShortcut, bool portable)
         {
             try
             {
@@ -141,6 +149,7 @@ namespace PdfTranslator.Setup
                 installer.Scope = scope;
                 installer.Directory = directory ?? Installer.DefaultDirectory(scope);
                 installer.DesktopShortcut = desktopShortcut;
+                installer.Portable = portable;
 
                 if (Installer.IsRunning(installer.Directory))
                 {

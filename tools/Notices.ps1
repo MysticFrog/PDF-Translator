@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Writes THIRD-PARTY-NOTICES.txt from the packages this build actually ships.
 
@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path $PSScriptRoot -Parent
 $packages = Join-Path $env:USERPROFILE '.nuget\packages'
-$dotnetRoot = Join-Path $env:USERPROFILE 'source\tools\dotnet8'
+$dotnetRoot = Join-Path $env:USERPROFILE 'source\tools\dotnet10'
 $assetsFile = Join-Path $env:USERPROFILE 'source\build\PdfTranslator\obj\project.assets.json'
 if (-not (Test-Path $assetsFile)) { throw "No restore output at $assetsFile - build first." }
 $assets = Get-Content $assetsFile -Raw | ConvertFrom-Json
